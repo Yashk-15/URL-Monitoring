@@ -19,10 +19,10 @@ import {
     IconUsers,
 } from "@tabler/icons-react"
 
-import { NavDocuments } from "@/components/nav-documents"
-import { NavMain } from "@/components/nav-main"
-import { NavSecondary } from "@/components/nav-secondary"
-import { NavUser } from "@/components/nav-user"
+import { NavDocuments } from "@/components/layout/sidebar/nav-documents"
+import { NavMain } from "@/components/layout/sidebar/nav-main"
+import { NavSecondary } from "@/components/layout/sidebar/nav-secondary"
+import { NavUser } from "@/components/layout/sidebar/nav-user"
 import {
     Sidebar,
     SidebarContent,
@@ -32,13 +32,9 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { useAuth } from "@/contexts/auth-context"
 
 const data = {
-    user: {
-        name: "Admin User",
-        email: "admin@urlmonitor.com",
-        avatar: "/avatars/user.jpg",
-    },
     navMain: [
         {
             title: "Overview",
@@ -82,6 +78,8 @@ const data = {
 }
 
 export function AppSidebar({ ...props }) {
+    const { user } = useAuth()
+
     return (
         <Sidebar collapsible="offcanvas" {...props}>
             <SidebarHeader>
@@ -105,7 +103,7 @@ export function AppSidebar({ ...props }) {
                 <NavSecondary items={data.navSecondary} className="mt-auto" />
             </SidebarContent>
             <SidebarFooter>
-                <NavUser user={data.user} />
+                {user && <NavUser user={user} />}
             </SidebarFooter>
         </Sidebar>
     )

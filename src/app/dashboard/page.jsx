@@ -1,11 +1,11 @@
 "use client"
 
 import { Suspense, useEffect, useState } from "react"
-import { AppSidebar } from "@/components/app-sidebar"
-import { ChartAreaInteractive } from "@/components/chart-area-interactive"
-import { DataTable } from "@/components/data-table"
-import { SectionCards } from "@/components/section-cards"
-import { SiteHeader } from "@/components/site-header"
+import { AppSidebar } from "@/components/layout/sidebar/app-sidebar"
+import { ChartAreaInteractive } from "@/app/dashboard/components/charts/area-chart"
+import { DataTable } from "@/app/dashboard/components/url-table"
+import { SectionCards } from "@/app/dashboard/components/stats-cards"
+import { SiteHeader } from "@/components/layout/site-header"
 import {
     SidebarInset,
     SidebarProvider,
@@ -14,6 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { useSearchParams } from "next/navigation"
+import { ProtectedRoute } from "@/components/auth/protected-route"
 
 function DashboardContent() {
     const searchParams = useSearchParams()
@@ -33,6 +34,12 @@ function DashboardContent() {
             setActiveTab("down")
         } else if (view === "active") {
             setActiveTab("active")
+        } else if (view === "analytics") {
+            setActiveTab("analytics")
+        } else if (view === "settings") {
+            setActiveTab("settings")
+        } else if (view === "reports") {
+            setActiveTab("reports")
         } else {
             setActiveTab("all")
         }
@@ -140,6 +147,36 @@ function DashboardContent() {
                                     </div>
                                     <DataTable data={filteredData} />
                                 </TabsContent>
+
+                                <TabsContent value="analytics" className="space-y-4">
+                                    <div className="px-4 lg:px-6">
+                                        <h2 className="text-2xl font-bold mb-4">Analytics</h2>
+                                        <div className="">
+                                            <ChartAreaInteractive />
+                                        </div>
+                                        <p className="text-muted-foreground mt-4">
+                                            Detailed analytics and performance metrics will be displayed here.
+                                        </p>
+                                    </div>
+                                </TabsContent>
+
+                                <TabsContent value="settings" className="space-y-4">
+                                    <div className="px-4 lg:px-6">
+                                        <h2 className="text-2xl font-bold mb-4">Settings</h2>
+                                        <p className="text-muted-foreground">
+                                            Configure your monitoring preferences, notification settings, and account details here.
+                                        </p>
+                                    </div>
+                                </TabsContent>
+
+                                <TabsContent value="reports" className="space-y-4">
+                                    <div className="px-4 lg:px-6">
+                                        <h2 className="text-2xl font-bold mb-4">Uptime Reports</h2>
+                                        <p className="text-muted-foreground">
+                                            View and download historical uptime reports for your monitored URLs.
+                                        </p>
+                                    </div>
+                                </TabsContent>
                             </Tabs>
                         </div>
                     </div>
@@ -151,8 +188,10 @@ function DashboardContent() {
 
 export default function Page() {
     return (
-        <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading dashboard...</div>}>
-            <DashboardContent />
-        </Suspense>
+        <ProtectedRoute>
+            <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading dashboard...</div>}>
+                <DashboardContent />
+            </Suspense>
+        </ProtectedRoute>
     )
 }
