@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/sidebar"
 
 export function NavSecondary({ items, ...props }) {
+    if (!items?.length) return null
+
     return (
         <SidebarGroup {...props}>
             <SidebarGroupContent>

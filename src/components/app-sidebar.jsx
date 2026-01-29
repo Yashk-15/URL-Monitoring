@@ -42,62 +42,41 @@ const data = {
     navMain: [
         {
             title: "Overview",
-            url: "/dashboard",
+            url: "/dashboard?view=all",
             icon: IconDashboard,
         },
         {
             title: "Monitored URLs",
-            url: "/dashboard",
+            url: "/dashboard?view=all",
             icon: IconListDetails,
         },
         {
             title: "Alerts & Incidents",
-            url: "/dashboard",
+            url: "/dashboard?view=incidents",
             icon: IconCamera,
         },
         {
             title: "Analytics",
-            url: "/dashboard",
+            url: "/dashboard?view=analytics",
             icon: IconChartBar,
         },
         {
             title: "Settings",
-            url: "/dashboard",
+            url: "/dashboard?view=settings",
             icon: IconSettings,
         },
     ],
-    navSecondary: [
-        {
-            title: "API Docs",
-            url: "/dashboard",
-            icon: IconFileDescription,
-        },
-        {
-            title: "Get Help",
-            url: "/dashboard",
-            icon: IconHelp,
-        },
-        {
-            title: "Search",
-            url: "/dashboard",
-            icon: IconSearch,
-        },
-    ],
+    navSecondary: [],
     documents: [
         {
             name: "Alert History",
-            url: "/dashboard",
+            url: "/dashboard?view=incidents",
             icon: IconDatabase,
         },
         {
             name: "Uptime Reports",
-            url: "/dashboard",
+            url: "/dashboard?view=reports",
             icon: IconReport,
-        },
-        {
-            name: "API Documentation",
-            url: "/dashboard",
-            icon: IconFileAi,
         },
     ],
 }
