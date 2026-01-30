@@ -59,7 +59,7 @@ function DashboardContent() {
 
             const result = await response.json()
 
-            // Transform API response to match component expectations
+            // Extract URLs array from response
             let rawData = []
             if (Array.isArray(result)) {
                 rawData = result
@@ -67,43 +67,30 @@ function DashboardContent() {
                 rawData = result.data || result.urls || []
             }
 
-            // Transform each URL object to include required fields
-            const transformedData = rawData.map((url, index) => {
-                // Generate mock monitoring data since API doesn't provide it
-                const isEnabled = url.enabled !== false
-                const mockStatus = isEnabled
-                    ? (Math.random() > 0.2 ? "Up" : (Math.random() > 0.5 ? "Down" : "Warning"))
-                    : "Down"
-                const mockResponseTime = mockStatus === "Up"
-                    ? Math.floor(Math.random() * 500) + 50
-                    : (mockStatus === "Down" ? 0 : Math.floor(Math.random() * 1000) + 500)
-                const mockUptime = mockStatus === "Up"
-                    ? (99 + Math.random()).toFixed(2)
-                    : (95 + Math.random() * 4).toFixed(2)
-
-                const regions = ["US-East", "EU-West", "AP-South", "US-West", "EU-Central"]
-                const mockRegion = regions[index % regions.length]
-
-                const now = new Date()
-                const minutesAgo = Math.floor(Math.random() * 10) + 1
-                const mockLastCheck = new Date(now - minutesAgo * 60000).toLocaleString()
-
-                return {
-                    id: url.URLid || `url-${index}`, // Map URLid to id
-                    name: url.name || "Unnamed URL",
-                    url: url.url || "",
-                    status: mockStatus,
-                    responseTime: mockResponseTime.toString(),
-                    uptime: mockUptime,
-                    lastCheck: mockLastCheck,
-                    region: mockRegion,
-                    // Keep original fields for reference
-                    enabled: url.enabled,
-                    expectedStatus: url.expectedStatus,
-                    maxLatencyMs: url.maxLatencyMs,
-                    timeoutSeconds: url.timeoutSeconds,
-                }
-            })
+            // Map API response to component expectations
+            // Backend now returns REAL health data from DynamoDB!
+            const transformedData = rawData.map((url) => ({
+                // Use 'id' field (backend now provides this)
+                id: url.id || url.URLid,
+                name: url.name || "Unnamed URL",
+                url: url.url || "",
+                // REAL monitoring data from backend
+                status: url.status || "Unknown",
+                responseTime: url.responseTime?.toString() || "0",
+                uptime: url.uptime || "0",
+                lastCheck: url.lastCheck || "Never",
+                region: url.region || "Unknown",
+                // Keep original fields for reference
+                enabled: url.enabled,
+                expectedStatus: url.expectedStatus,
+                maxLatencyMs: url.maxLatencyMs,
+                timeoutSeconds: url.timeoutSeconds,
+                // Additional health info from backend
+                statusCode: url.statusCode,
+                errorMsg: url.errorMsg,
+                isUp: url.isUp,
+                isSlow: url.isSlow,
+            }))
 
             setData(transformedData)
         } catch (err) {
