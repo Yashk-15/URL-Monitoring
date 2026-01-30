@@ -11,19 +11,22 @@ import {
 } from "@/components/ui/card"
 
 export function SectionCards({ data = [], loading = false }) {
-    // Calculate metrics from data
+    // Calculate metrics from data with safe null checks
     const totalURLs = data.length
-    const activeMonitors = data.filter(url => url.status === "Up").length
-    const failedChecks = data.filter(url => url.status === "Down").length
-    const warningChecks = data.filter(url => url.status === "Warning").length
+    const activeMonitors = data.filter(url => url?.status === "Up").length
+    const failedChecks = data.filter(url => url?.status === "Down").length
+    const warningChecks = data.filter(url => url?.status === "Warning").length
 
-    // Calculate average response time
+    // Calculate average response time with safe parsing
     const avgResponseTime = data.length > 0
-        ? Math.round(data.reduce((sum, url) => sum + (parseInt(url.responseTime) || 0), 0) / data.length)
+        ? Math.round(data.reduce((sum, url) => {
+            const responseTime = url?.responseTime ? parseInt(url.responseTime) : 0
+            return sum + responseTime
+        }, 0) / data.length)
         : 0
 
-    // Calculate unique regions
-    const uniqueRegions = [...new Set(data.map(url => url.region))].length
+    // Calculate unique regions with null filtering
+    const uniqueRegions = [...new Set(data.map(url => url?.region).filter(Boolean))].length
 
     // Calculate percentage of active monitors
     const activePercentage = totalURLs > 0 ? ((activeMonitors / totalURLs) * 100).toFixed(1) : 0

@@ -59,15 +59,53 @@ function DashboardContent() {
 
             const result = await response.json()
 
-            // Ensure data is always an array
+            // Transform API response to match component expectations
+            let rawData = []
             if (Array.isArray(result)) {
-                setData(result)
+                rawData = result
             } else if (result && typeof result === 'object') {
-                // If API returns an object with a data property
-                setData(result.data || result.urls || [])
-            } else {
-                setData([])
+                rawData = result.data || result.urls || []
             }
+
+            // Transform each URL object to include required fields
+            const transformedData = rawData.map((url, index) => {
+                // Generate mock monitoring data since API doesn't provide it
+                const isEnabled = url.enabled !== false
+                const mockStatus = isEnabled
+                    ? (Math.random() > 0.2 ? "Up" : (Math.random() > 0.5 ? "Down" : "Warning"))
+                    : "Down"
+                const mockResponseTime = mockStatus === "Up"
+                    ? Math.floor(Math.random() * 500) + 50
+                    : (mockStatus === "Down" ? 0 : Math.floor(Math.random() * 1000) + 500)
+                const mockUptime = mockStatus === "Up"
+                    ? (99 + Math.random()).toFixed(2)
+                    : (95 + Math.random() * 4).toFixed(2)
+
+                const regions = ["US-East", "EU-West", "AP-South", "US-West", "EU-Central"]
+                const mockRegion = regions[index % regions.length]
+
+                const now = new Date()
+                const minutesAgo = Math.floor(Math.random() * 10) + 1
+                const mockLastCheck = new Date(now - minutesAgo * 60000).toLocaleString()
+
+                return {
+                    id: url.URLid || `url-${index}`, // Map URLid to id
+                    name: url.name || "Unnamed URL",
+                    url: url.url || "",
+                    status: mockStatus,
+                    responseTime: mockResponseTime.toString(),
+                    uptime: mockUptime,
+                    lastCheck: mockLastCheck,
+                    region: mockRegion,
+                    // Keep original fields for reference
+                    enabled: url.enabled,
+                    expectedStatus: url.expectedStatus,
+                    maxLatencyMs: url.maxLatencyMs,
+                    timeoutSeconds: url.timeoutSeconds,
+                }
+            })
+
+            setData(transformedData)
         } catch (err) {
             console.error("Error fetching URLs:", err)
             setError(err.message)
@@ -112,7 +150,7 @@ function DashboardContent() {
 
                                 <TabsContent value="all" className="space-y-4">
                                     <div className="">
-                                        <ChartAreaInteractive />
+                                        <ChartAreaInteractive data={data} />
                                     </div>
                                     {loading ? (
                                         <div className="text-center py-8">
@@ -136,14 +174,14 @@ function DashboardContent() {
                                 <TabsContent value="active" className="space-y-4">
                                     {/* Reuse same structure for active tab, filteredData handles content */}
                                     <div className="">
-                                        <ChartAreaInteractive />
+                                        <ChartAreaInteractive data={filteredData} />
                                     </div>
                                     <DataTable data={filteredData} />
                                 </TabsContent>
 
                                 <TabsContent value="down" className="space-y-4">
                                     <div className="">
-                                        <ChartAreaInteractive />
+                                        <ChartAreaInteractive data={filteredData} />
                                     </div>
                                     <DataTable data={filteredData} />
                                 </TabsContent>
@@ -152,7 +190,7 @@ function DashboardContent() {
                                     <div className="px-4 lg:px-6">
                                         <h2 className="text-2xl font-bold mb-4">Analytics</h2>
                                         <div className="">
-                                            <ChartAreaInteractive />
+                                            <ChartAreaInteractive data={data} />
                                         </div>
                                         <p className="text-muted-foreground mt-4">
                                             Detailed analytics and performance metrics will be displayed here.

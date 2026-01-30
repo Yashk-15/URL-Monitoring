@@ -297,6 +297,13 @@ export function DataTable({ data: initialData }) {
         useSensor(KeyboardSensor, {})
     )
 
+    // Sync with parent data updates
+    React.useEffect(() => {
+        if (initialData) {
+            setData(initialData)
+        }
+    }, [initialData])
+
     const dataIds = React.useMemo(
         () => data?.map(({ id }) => id) || [],
         [data]
