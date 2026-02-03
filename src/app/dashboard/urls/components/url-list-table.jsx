@@ -52,33 +52,57 @@ import {
 } from "@/components/ui/table"
 import { URLPerformanceChart } from "./url-performance-chart"
 
-// Generate mock performance data for demonstration
-// In production, this would come from the API
-function generateMockPerformanceData(baseResponseTime) {
-    const data = []
-    const now = Date.now()
-    for (let i = 23; i >= 0; i--) {
-        const timestamp = now - (i * 60 * 60 * 1000) // hourly data for 24 hours
-        const variation = Math.random() * 100 - 50 // ±50ms variation
-        data.push({
-            timestamp,
-            responseTime: Math.max(50, baseResponseTime + variation),
-        })
+// Fetch performance data from API
+async function fetchPerformanceData(urlId) {
+    try {
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE
+        const response = await fetch(`${apiBase}/logs?urlId=${urlId}&limit=24`)
+
+        if (!response.ok) {
+            console.warn("Performance data not available")
+            return []
+        }
+
+        const result = await response.json()
+        let logs = []
+
+        if (Array.isArray(result)) {
+            logs = result
+        } else if (result && typeof result === 'object') {
+            logs = result.data || result.logs || []
+        }
+
+        // Transform logs to chart data format
+        return logs
+            .filter(log => log.responseTime && log.timestamp)
+            .map(log => ({
+                timestamp: new Date(log.timestamp).getTime(),
+                responseTime: parseInt(log.responseTime) || 0,
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp)
+            .slice(-24) // Last 24 data points
+    } catch (error) {
+        console.error("Error fetching performance data:", error)
+        return []
     }
-    return data
 }
 
 const columns = [
     {
         accessorKey: "name",
         header: "Name",
-        cell: ({ row }) => (
+        cell: ({ row, table }) => (
             <div className="flex items-center gap-2">
                 <Button
                     variant="ghost"
                     size="icon"
                     className="size-6"
-                    onClick={() => row.toggleExpanded()}
+                    onClick={() => {
+                        const handleExpand = table.options.meta?.handleRowExpand
+                        if (handleExpand) {
+                            handleExpand(row.id, row.original.id)
+                        }
+                    }}
                 >
                     <IconChevronDown
                         className={`size-4 transition-transform ${row.getIsExpanded() ? "rotate-180" : ""
@@ -207,6 +231,8 @@ export function URLListTable({ data: initialData }) {
         pageIndex: 0,
         pageSize: 10,
     })
+    const [performanceData, setPerformanceData] = React.useState({})
+    const [loadingPerformance, setLoadingPerformance] = React.useState({})
 
     // Sync with parent data updates
     React.useEffect(() => {
@@ -214,6 +240,25 @@ export function URLListTable({ data: initialData }) {
             setData(initialData)
         }
     }, [initialData])
+
+    // Fetch performance data when row is expanded
+    const handleRowExpand = React.useCallback(async (rowId, urlId) => {
+        const isExpanding = !expanded[rowId]
+
+        // Toggle expansion
+        setExpanded(prev => ({
+            ...prev,
+            [rowId]: isExpanding
+        }))
+
+        // Fetch performance data if expanding and not already loaded
+        if (isExpanding && !performanceData[urlId]) {
+            setLoadingPerformance(prev => ({ ...prev, [urlId]: true }))
+            const data = await fetchPerformanceData(urlId)
+            setPerformanceData(prev => ({ ...prev, [urlId]: data }))
+            setLoadingPerformance(prev => ({ ...prev, [urlId]: false }))
+        }
+    }, [expanded, performanceData])
 
     const table = useReactTable({
         data,
@@ -236,6 +281,11 @@ export function URLListTable({ data: initialData }) {
         getSortedRowModel: getSortedRowModel(),
         getExpandedRowModel: getExpandedRowModel(),
         getRowCanExpand: () => true,
+        meta: {
+            handleRowExpand,
+            performanceData,
+            loadingPerformance,
+        },
     })
 
     // Get unique regions for filter
@@ -349,12 +399,17 @@ export function URLListTable({ data: initialData }) {
                                     {row.getIsExpanded() && (
                                         <TableRow>
                                             <TableCell colSpan={columns.length} className="bg-muted/50 p-4">
-                                                <URLPerformanceChart
-                                                    data={generateMockPerformanceData(
-                                                        parseInt(row.original.responseTime) || 200
-                                                    )}
-                                                    urlName={row.original.name}
-                                                />
+                                                {table.options.meta?.loadingPerformance?.[row.original.id] ? (
+                                                    <div className="text-center py-8">
+                                                        <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                                                        <p className="text-muted-foreground text-sm mt-2">Loading performance data...</p>
+                                                    </div>
+                                                ) : (
+                                                    <URLPerformanceChart
+                                                        data={table.options.meta?.performanceData?.[row.original.id] || []}
+                                                        urlName={row.original.name}
+                                                    />
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     )}

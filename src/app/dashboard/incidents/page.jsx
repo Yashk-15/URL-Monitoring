@@ -19,82 +19,164 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 
-// Mock data generator for incidents
-function generateMockIncidents() {
-    const incidents = []
-    const now = Date.now()
-    const severities = ["critical", "warning", "info"]
-    const statuses = ["active", "acknowledged", "resolved"]
-    const titles = [
-        "High Response Time Detected",
-        "Service Unavailable",
-        "SSL Certificate Expiring Soon",
-        "Timeout Error",
-        "DNS Resolution Failed",
-        "Server Not Responding",
-        "Rate Limit Exceeded",
-        "Database Connection Lost",
-    ]
-    const urls = [
-        "https://api.example.com/health",
-        "https://www.example.com",
-        "https://app.example.com/api",
-        "https://cdn.example.com",
-    ]
-
-    // Generate incidents for different time periods
-    const timeOffsets = [
-        { hours: 2, count: 2 },      // Today
-        { hours: 26, count: 3 },     // Yesterday
-        { hours: 72, count: 4 },     // This week
-        { hours: 200, count: 3 },    // Older
-    ]
-
-    let id = 1
-    timeOffsets.forEach(({ hours, count }) => {
-        for (let i = 0; i < count; i++) {
-            const timestamp = new Date(now - (hours * 60 * 60 * 1000) - (i * 60 * 60 * 1000))
-            const severity = severities[Math.floor(Math.random() * severities.length)]
-            const status = statuses[Math.floor(Math.random() * statuses.length)]
-            const affectedUrlCount = Math.floor(Math.random() * 2) + 1
-
-            incidents.push({
-                id: id++,
-                title: titles[Math.floor(Math.random() * titles.length)],
-                description: `Monitoring detected an issue with the endpoint. Response time exceeded threshold or service became unavailable.`,
-                severity,
-                status,
-                timestamp: timestamp.toLocaleString(),
-                affectedUrls: Array.from({ length: affectedUrlCount }, () =>
-                    urls[Math.floor(Math.random() * urls.length)]
-                ),
-                errorMessage: status === "active" ? "Connection timeout after 30 seconds" : null,
-                resolvedAt: status === "resolved" ? new Date(timestamp.getTime() + 3600000).toLocaleString() : null,
-                resolvedBy: status === "resolved" ? "Auto-resolved" : null,
-            })
-        }
-    })
-
-    return incidents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-}
-
 function IncidentsContent() {
     const [incidents, setIncidents] = useState([])
     const [filteredIncidents, setFilteredIncidents] = useState([])
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(null)
     const [severityFilter, setSeverityFilter] = useState("all")
     const [statusFilter, setStatusFilter] = useState("all")
 
     useEffect(() => {
-        // In production, fetch from API
-        // For now, use mock data
-        setTimeout(() => {
-            const mockData = generateMockIncidents()
-            setIncidents(mockData)
-            setFilteredIncidents(mockData)
-            setLoading(false)
-        }, 500)
+        fetchIncidents()
     }, [])
+
+    const fetchIncidents = async () => {
+        try {
+            setLoading(true)
+            setError(null)
+
+            const apiBase = process.env.NEXT_PUBLIC_API_BASE
+
+            // Try to fetch from incidents endpoint
+            let response
+            try {
+                response = await fetch(`${apiBase}/incidents`)
+            } catch (fetchError) {
+                console.warn("Incidents endpoint not available:", fetchError.message)
+                response = { ok: false, status: 404 }
+            }
+
+            if (!response.ok) {
+                // If incidents endpoint doesn't exist, try to derive from URL logs
+                console.warn("Incidents endpoint not available, attempting to fetch from logs")
+
+                let logsResponse
+                try {
+                    logsResponse = await fetch(`${apiBase}/logs`)
+                } catch (logsError) {
+                    console.warn("Logs endpoint not available:", logsError.message)
+                    // Try /urls endpoint as final fallback
+                    try {
+                        logsResponse = await fetch(`${apiBase}/urls`)
+                    } catch (urlsError) {
+                        console.warn("URLs endpoint not available:", urlsError.message)
+                        // Show empty state instead of error
+                        setIncidents([])
+                        setFilteredIncidents([])
+                        setLoading(false)
+                        return
+                    }
+                }
+
+                if (!logsResponse.ok) {
+                    // Show empty state instead of throwing error
+                    setIncidents([])
+                    setFilteredIncidents([])
+                    setLoading(false)
+                    return
+                }
+
+                const logsResult = await logsResponse.json()
+
+                // Transform logs into incidents
+                const derivedIncidents = deriveIncidentsFromLogs(logsResult)
+                setIncidents(derivedIncidents)
+                setFilteredIncidents(derivedIncidents)
+                setLoading(false)
+                return
+            }
+
+            const result = await response.json()
+
+            // Extract incidents array from response
+            let rawData = []
+            if (Array.isArray(result)) {
+                rawData = result
+            } else if (result && typeof result === 'object') {
+                rawData = result.data || result.incidents || []
+            }
+
+            // Transform API response to match component expectations
+            const transformedIncidents = rawData.map((incident) => ({
+                id: incident.id || incident.incidentId,
+                title: incident.title || incident.message || "Incident Detected",
+                description: incident.description || incident.details || "An issue was detected with the monitored endpoint",
+                severity: incident.severity?.toLowerCase() || (incident.status === "Down" ? "critical" : "warning"),
+                status: incident.status?.toLowerCase() || "active",
+                timestamp: incident.timestamp || incident.createdAt || new Date().toISOString(),
+                affectedUrls: incident.affectedUrls || (incident.url ? [incident.url] : []),
+                errorMessage: incident.errorMessage || incident.error,
+                resolvedAt: incident.resolvedAt,
+                resolvedBy: incident.resolvedBy,
+            }))
+
+            setIncidents(transformedIncidents)
+            setFilteredIncidents(transformedIncidents)
+        } catch (err) {
+            console.error("Error fetching incidents:", err)
+            // Show empty state instead of error for network issues
+            setIncidents([])
+            setFilteredIncidents([])
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // Helper function to derive incidents from URL monitoring logs
+    const deriveIncidentsFromLogs = (logsData) => {
+        console.log("Raw logs data:", logsData) // Debug log
+
+        let logs = []
+        if (Array.isArray(logsData)) {
+            logs = logsData
+        } else if (logsData && typeof logsData === 'object') {
+            logs = logsData.data || logsData.logs || logsData.urls || []
+        }
+
+        console.log("Processed logs:", logs) // Debug log
+
+        // Filter for failed checks and convert to incidents
+        const incidents = logs
+            .filter(log => {
+                // Check multiple conditions for failure
+                const isDown = log.status === "Down" || log.status === "down" || log.status === "DOWN"
+                const isError = log.status === "Error" || log.status === "error"
+                const hasErrorCode = log.statusCode && log.statusCode >= 400
+                const hasError = log.errorMsg || log.error || log.errorMessage
+
+                return isDown || isError || hasErrorCode || hasError
+            })
+            .map((log, index) => {
+                // Determine severity based on status code or status
+                let severity = "warning"
+                if (log.statusCode >= 500 || log.status === "Down") {
+                    severity = "critical"
+                } else if (log.statusCode >= 400) {
+                    severity = "warning"
+                }
+
+                // Create a descriptive title
+                const urlName = log.name || log.urlName || log.url || "Unknown URL"
+                const statusText = log.status || `HTTP ${log.statusCode}` || "Error"
+
+                return {
+                    id: log.id || log.URLid || `incident-${index}`,
+                    title: `${urlName} - ${statusText}`,
+                    description: log.errorMsg || log.error || log.errorMessage || `Monitoring detected an issue with ${log.url || "the endpoint"}. Service became unavailable.`,
+                    severity: severity,
+                    status: "active", // All log-based incidents are active
+                    timestamp: log.lastCheck || log.timestamp || log.checkedAt || new Date().toISOString(),
+                    affectedUrls: [log.url].filter(Boolean),
+                    errorMessage: log.errorMsg || log.error || log.errorMessage,
+                    resolvedAt: null,
+                    resolvedBy: null,
+                }
+            })
+
+        console.log("Derived incidents:", incidents) // Debug log
+        return incidents
+    }
 
     useEffect(() => {
         let filtered = incidents
@@ -255,6 +337,16 @@ function IncidentsContent() {
                                     <div className="text-center py-12">
                                         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                         <p className="text-muted-foreground mt-4">Loading incidents...</p>
+                                    </div>
+                                ) : error ? (
+                                    <div className="text-center py-12">
+                                        <p className="text-destructive mb-4">Error: {error}</p>
+                                        <button
+                                            onClick={fetchIncidents}
+                                            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+                                        >
+                                            Retry
+                                        </button>
                                     </div>
                                 ) : (
                                     <IncidentTimeline incidents={filteredIncidents} />
