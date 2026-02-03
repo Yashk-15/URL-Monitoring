@@ -43,7 +43,7 @@ const data = {
         },
         {
             title: "Monitored URLs",
-            url: "/dashboard?view=all",
+            url: "/dashboard/urls",
             icon: IconListDetails,
         },
         {
