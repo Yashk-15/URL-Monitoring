@@ -26,7 +26,7 @@ export function AuthProvider({ children }) {
             // Mock login - replace with actual API call
             const mockUser = {
                 id: "1",
-                name: "John Doe",
+                name: "Yash",
                 email: email,
             }
 

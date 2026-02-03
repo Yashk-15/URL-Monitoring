@@ -48,7 +48,7 @@ const data = {
         },
         {
             title: "Alerts & Incidents",
-            url: "/dashboard?view=incidents",
+            url: "/dashboard/incidents",
             icon: IconCamera,
         },
         {
