@@ -53,12 +53,12 @@ function IncidentsContent() {
 
                 let logsResponse
                 try {
-                    logsResponse = await fetch(`${apiBase}/logs`)
+                    logsResponse = await apiClient.get('/logs')
                 } catch (logsError) {
                     console.warn("Logs endpoint not available:", logsError.message)
                     // Try /urls endpoint as final fallback
                     try {
-                        logsResponse = await fetch(`${apiBase}/urls`)
+                        logsResponse = await apiClient.get('/urls')
                     } catch (urlsError) {
                         console.warn("URLs endpoint not available:", urlsError.message)
                         // Show empty state instead of error

@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { signUp, signIn, signOut, getCurrentUser, fetchAuthSession, confirmSignUp } from "aws-amplify/auth"
+import "../lib/amplify-config"
 
 const AuthContext = createContext({})
 
@@ -12,70 +14,124 @@ export function AuthProvider({ children }) {
 
     // Check for existing session on mount
     useEffect(() => {
-        const token = localStorage.getItem("token")
-        const userData = localStorage.getItem("user")
-
-        if (token && userData) {
-            setUser(JSON.parse(userData))
-        }
-        setLoading(false)
+        checkUser()
     }, [])
+
+    const checkUser = async () => {
+        try {
+            const currentUser = await getCurrentUser()
+            const session = await fetchAuthSession()
+
+            setUser({
+                id: currentUser.userId,
+                email: currentUser.signInDetails?.loginId,
+                name: currentUser.username,
+                token: session.tokens?.idToken?.toString(),
+            })
+        } catch (error) {
+            setUser(null)
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const login = async (email, password) => {
         try {
-            // Mock login - replace with actual API call
-            const mockUser = {
-                id: "1",
-                name: "Yash",
-                email: email,
+            const { isSignedIn } = await signIn({
+                username: email,
+                password: password,
+            })
+
+            if (isSignedIn) {
+                await checkUser()
+                return { success: true }
             }
 
-            const mockToken = "mock-jwt-token-" + Date.now()
-
-            localStorage.setItem("token", mockToken)
-            localStorage.setItem("user", JSON.stringify(mockUser))
-            setUser(mockUser)
-
-            return { success: true }
+            return { success: false, error: "Login failed" }
         } catch (error) {
-            return { success: false, error: error.message }
+            console.error("Login error:", error)
+            return {
+                success: false,
+                error: error.message || "Invalid email or password"
+            }
         }
     }
 
     const signup = async (name, email, password) => {
         try {
-            // Mock signup - replace with actual API call
-            const mockUser = {
-                id: "1",
-                name: name,
-                email: email,
+            const { isSignUpComplete, userId, nextStep } = await signUp({
+                username: email,
+                password: password,
+                options: {
+                    userAttributes: {
+                        email: email,
+                        name: name,
+                    },
+                },
+            })
+
+            if (nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
+                return {
+                    success: true,
+                    requiresVerification: true,
+                    message: "Please check your email for verification code"
+                }
             }
 
-            const mockToken = "mock-jwt-token-" + Date.now()
+            if (isSignUpComplete) {
+                return { success: true }
+            }
 
-            localStorage.setItem("token", mockToken)
-            localStorage.setItem("user", JSON.stringify(mockUser))
-            setUser(mockUser)
-
-            return { success: true }
+            return { success: false, error: "Signup failed" }
         } catch (error) {
-            return { success: false, error: error.message }
+            console.error("Signup error:", error)
+            return {
+                success: false,
+                error: error.message || "Signup failed"
+            }
         }
     }
 
-    const logout = () => {
-        localStorage.removeItem("token")
-        localStorage.removeItem("user")
-        setUser(null)
-        router.push("/login")
+    const confirmSignup = async (email, code) => {
+        try {
+            await confirmSignUp({
+                username: email,
+                confirmationCode: code,
+            })
+            return { success: true }
+        } catch (error) {
+            console.error("Confirmation error:", error)
+            return {
+                success: false,
+                error: error.message || "Verification failed"
+            }
+        }
+    }
+
+    const logout = async () => {
+        try {
+            await signOut()
+            setUser(null)
+            router.push("/login")
+        } catch (error) {
+            console.error("Logout error:", error)
+        }
     }
 
     const getToken = () => {
-        return localStorage.getItem("token")
+        return user?.token || null
     }
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, signup, logout, getToken }}>
+        <AuthContext.Provider value={{
+            user,
+            loading,
+            login,
+            signup,
+            confirmSignup,
+            logout,
+            getToken
+        }}>
             {children}
         </AuthContext.Provider>
     )

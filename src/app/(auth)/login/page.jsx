@@ -11,7 +11,7 @@ export default function LoginPage() {
     const [error, setError] = useState("")
     const [loading, setLoading] = useState(false)
     const router = useRouter()
-    const { login } = useAuth()
+    const { login, logout } = useAuth()
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -19,6 +19,13 @@ export default function LoginPage() {
         setLoading(true)
 
         try {
+            // Try to sign out first in case there's an existing session
+            try {
+                await logout()
+            } catch (logoutError) {
+                // Ignore logout errors, user might not be signed in
+            }
+
             const result = await login(email, password)
             if (result.success) {
                 router.push("/dashboard")

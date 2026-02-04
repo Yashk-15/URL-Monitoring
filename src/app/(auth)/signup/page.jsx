@@ -26,8 +26,8 @@ export default function SignupPage() {
             return
         }
 
-        if (password.length < 6) {
-            setError("Password must be at least 6 characters")
+        if (password.length < 8) {
+            setError("Password must be at least 8 characters")
             return
         }
 
@@ -41,7 +41,12 @@ export default function SignupPage() {
         try {
             const result = await signup(name, email, password)
             if (result.success) {
-                router.push("/dashboard")
+                if (result.requiresVerification) {
+                    // Redirect to verification page
+                    router.push(`/verify-email?email=${encodeURIComponent(email)}`)
+                } else {
+                    router.push("/dashboard")
+                }
             } else {
                 setError(result.error || "Signup failed")
             }
@@ -118,7 +123,7 @@ export default function SignupPage() {
                                 className="w-full px-4 py-3 bg-background border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent transition-all outline-none text-foreground"
                                 placeholder="••••••••"
                             />
-                            <p className="text-xs text-muted-foreground mt-1">Must be at least 6 characters</p>
+                            <p className="text-xs text-muted-foreground mt-1">Must be at least 8 characters with uppercase, lowercase, number, and special character</p>
                         </div>
 
                         <div>

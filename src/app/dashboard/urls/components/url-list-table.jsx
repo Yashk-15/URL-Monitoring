@@ -51,12 +51,12 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { URLPerformanceChart } from "./url-performance-chart"
+import { apiClient } from "@/lib/api-client"
 
 // Fetch performance data from API
 async function fetchPerformanceData(urlId) {
     try {
-        const apiBase = process.env.NEXT_PUBLIC_API_BASE
-        const response = await fetch(`${apiBase}/logs?urlId=${urlId}&limit=24`)
+        const response = await apiClient.get(`/logs?urlId=${urlId}&limit=24`)
 
         if (!response.ok) {
             console.warn("Performance data not available")

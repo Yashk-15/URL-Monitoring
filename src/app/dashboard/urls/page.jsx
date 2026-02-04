@@ -10,6 +10,7 @@ import {
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { URLListTable } from "./components/url-list-table"
 import { IconListDetails } from "@tabler/icons-react"
+import { apiClient } from "@/lib/api-client"
 
 function MonitoredURLsContent() {
     const [data, setData] = useState([])
@@ -25,8 +26,7 @@ function MonitoredURLsContent() {
             setLoading(true)
             setError(null)
 
-            const apiBase = process.env.NEXT_PUBLIC_API_BASE
-            const response = await fetch(`${apiBase}/urls`)
+            const response = await apiClient.get('/urls')
 
             if (!response.ok) {
                 throw new Error(`API Error: ${response.status} ${response.statusText}`)

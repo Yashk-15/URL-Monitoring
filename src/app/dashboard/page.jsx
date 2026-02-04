@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { useSearchParams } from "next/navigation"
 import { ProtectedRoute } from "@/components/auth/protected-route"
+import { apiClient } from "@/lib/api-client"
 
 function DashboardContent() {
     const searchParams = useSearchParams()
@@ -50,8 +51,7 @@ function DashboardContent() {
             setLoading(true)
             setError(null)
 
-            const apiBase = process.env.NEXT_PUBLIC_API_BASE
-            const response = await fetch(`${apiBase}/urls`)
+            const response = await apiClient.get('/urls')
 
             if (!response.ok) {
                 throw new Error(`API Error: ${response.status} ${response.statusText}`)
