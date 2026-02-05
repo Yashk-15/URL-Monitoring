@@ -11,6 +11,7 @@ import { ProtectedRoute } from "@/components/auth/protected-route"
 import { URLListTable } from "./components/url-list-table"
 import { IconListDetails } from "@tabler/icons-react"
 import { apiClient } from "@/lib/api-client"
+import { AddURLDialog } from "./components/add-url-dialog"
 
 function MonitoredURLsContent() {
     const [data, setData] = useState([])
@@ -87,18 +88,21 @@ function MonitoredURLsContent() {
                         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
                             {/* Page Header */}
                             <div className="px-4 lg:px-6">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="flex items-center justify-center size-10 rounded-lg bg-primary/10">
-                                        <IconListDetails className="size-5 text-primary" />
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center size-10 rounded-lg bg-primary/10">
+                                            <IconListDetails className="size-5 text-primary" />
+                                        </div>
+                                        <div>
+                                            <h1 className="text-2xl font-bold tracking-tight">
+                                                Monitored URLs
+                                            </h1>
+                                            <p className="text-muted-foreground text-sm">
+                                                View all monitored URLs with their status, uptime, and performance metrics
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h1 className="text-2xl font-bold tracking-tight">
-                                            Monitored URLs
-                                        </h1>
-                                        <p className="text-muted-foreground text-sm">
-                                            View all monitored URLs with their status, uptime, and performance metrics
-                                        </p>
-                                    </div>
+                                    <AddURLDialog onURLAdded={fetchURLs} />
                                 </div>
                             </div>
 
