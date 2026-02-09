@@ -12,10 +12,13 @@ import {
 } from "@/components/ui/sidebar"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { IconRefresh } from "@tabler/icons-react"
 
 import { useSearchParams } from "next/navigation"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { apiClient } from "@/lib/api-client"
+import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 
 function DashboardContent() {
     const searchParams = useSearchParams()
@@ -23,10 +26,16 @@ function DashboardContent() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [activeTab, setActiveTab] = useState("all")
+    const [lastUpdated, setLastUpdated] = useState(null)
+    const [isRefreshing, setIsRefreshing] = useState(false)
 
+    // Initial fetch
     useEffect(() => {
         fetchURLs()
     }, [])
+
+    // Auto-refresh every 30 seconds
+    const { refresh } = useAutoRefresh(fetchURLs, 30000, true)
 
     // Sync tab with URL query param
     useEffect(() => {
@@ -93,13 +102,20 @@ function DashboardContent() {
             }))
 
             setData(transformedData)
+            setLastUpdated(new Date())
         } catch (err) {
             console.error("Error fetching URLs:", err)
             setError(err.message)
             setData([]) // Set empty array on error
         } finally {
             setLoading(false)
+            setIsRefreshing(false)
         }
+    }
+
+    const handleManualRefresh = async () => {
+        setIsRefreshing(true)
+        await fetchURLs()
     }
 
     const filteredData = data.filter(item => {
@@ -133,6 +149,22 @@ function DashboardContent() {
                                             Incidents
                                         </TabsTrigger>
                                     </TabsList>
+                                    <div className="flex items-center gap-3">
+                                        {lastUpdated && (
+                                            <span className="text-sm text-muted-foreground">
+                                                Last updated: {lastUpdated.toLocaleTimeString()}
+                                            </span>
+                                        )}
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleManualRefresh}
+                                            disabled={isRefreshing}
+                                        >
+                                            <IconRefresh className={isRefreshing ? "animate-spin" : ""} />
+                                            {isRefreshing ? "Refreshing..." : "Refresh"}
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 <TabsContent value="all" className="space-y-4">

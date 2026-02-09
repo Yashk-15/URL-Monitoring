@@ -36,55 +36,46 @@ function IncidentsContent() {
             setLoading(true)
             setError(null)
 
-            const apiBase = process.env.NEXT_PUBLIC_API_BASE
-
-            // Try to fetch from incidents endpoint
+            // Try to fetch from incidents endpoint (with authentication)
             let response
             try {
-                response = await fetch(`${apiBase}/incidents`)
+                response = await apiClient.get('/incidents')
             } catch (fetchError) {
                 console.warn("Incidents endpoint not available:", fetchError.message)
                 response = { ok: false, status: 404 }
             }
 
             if (!response.ok) {
-                // If incidents endpoint doesn't exist, try to derive from URL logs
-                console.warn("Incidents endpoint not available, attempting to fetch from logs")
+                // If incidents endpoint doesn't exist, derive from URLs endpoint
+                console.warn("Incidents endpoint not available, attempting to fetch from /urls")
 
-                let logsResponse
                 try {
-                    logsResponse = await apiClient.get('/logs')
-                } catch (logsError) {
-                    console.warn("Logs endpoint not available:", logsError.message)
-                    // Try /urls endpoint as final fallback
-                    try {
-                        logsResponse = await apiClient.get('/urls')
-                    } catch (urlsError) {
-                        console.warn("URLs endpoint not available:", urlsError.message)
-                        // Show empty state instead of error
+                    const urlsResponse = await apiClient.get('/urls')
+
+                    if (!urlsResponse.ok) {
+                        // Show empty state instead of throwing error
                         setIncidents([])
                         setFilteredIncidents([])
                         setLoading(false)
                         return
                     }
-                }
 
-                if (!logsResponse.ok) {
-                    // Show empty state instead of throwing error
+                    const urlsResult = await urlsResponse.json()
+
+                    // Transform URLs into incidents
+                    const derivedIncidents = deriveIncidentsFromLogs(urlsResult)
+                    setIncidents(derivedIncidents)
+                    setFilteredIncidents(derivedIncidents)
+                    setLoading(false)
+                    return
+                } catch (urlsError) {
+                    console.warn("URLs endpoint not available:", urlsError.message)
+                    // Show empty state instead of error
                     setIncidents([])
                     setFilteredIncidents([])
                     setLoading(false)
                     return
                 }
-
-                const logsResult = await logsResponse.json()
-
-                // Transform logs into incidents
-                const derivedIncidents = deriveIncidentsFromLogs(logsResult)
-                setIncidents(derivedIncidents)
-                setFilteredIncidents(derivedIncidents)
-                setLoading(false)
-                return
             }
 
             const result = await response.json()
@@ -125,7 +116,7 @@ function IncidentsContent() {
 
     // Helper function to derive incidents from URL monitoring logs
     const deriveIncidentsFromLogs = (logsData) => {
-        console.log("Raw logs data:", logsData) // Debug log
+
 
         let logs = []
         if (Array.isArray(logsData)) {
@@ -134,7 +125,7 @@ function IncidentsContent() {
             logs = logsData.data || logsData.logs || logsData.urls || []
         }
 
-        console.log("Processed logs:", logs) // Debug log
+
 
         // Filter for failed checks and convert to incidents
         const incidents = logs
@@ -174,7 +165,7 @@ function IncidentsContent() {
                 }
             })
 
-        console.log("Derived incidents:", incidents) // Debug log
+
         return incidents
     }
 

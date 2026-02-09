@@ -52,15 +52,15 @@ function generateMockChartData() {
 
 
 const chartConfig = {
-    visitors: {
-        label: "Visitors",
+    responseTime: {
+        label: "Response Time (ms)",
     },
     desktop: {
-        label: "Desktop",
+        label: "Average Response",
         color: "var(--primary)",
     },
     mobile: {
-        label: "Mobile",
+        label: "Peak Response",
         color: "var(--primary)",
     },
 }
