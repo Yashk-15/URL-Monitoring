@@ -29,14 +29,6 @@ function DashboardContent() {
     const [lastUpdated, setLastUpdated] = useState(null)
     const [isRefreshing, setIsRefreshing] = useState(false)
 
-    // Initial fetch
-    useEffect(() => {
-        fetchURLs()
-    }, [])
-
-    // Auto-refresh every 30 seconds
-    const { refresh } = useAutoRefresh(fetchURLs, 30000, true)
-
     // Sync tab with URL query param
     useEffect(() => {
         const view = searchParams.get("view")
@@ -117,6 +109,14 @@ function DashboardContent() {
         setIsRefreshing(true)
         await fetchURLs()
     }
+
+    // Initial fetch on mount
+    useEffect(() => {
+        fetchURLs()
+    }, [])
+
+    // Auto-refresh every 30 seconds
+    useAutoRefresh(fetchURLs, 30000, true)
 
     const filteredData = data.filter(item => {
         if (activeTab === "all") return true
