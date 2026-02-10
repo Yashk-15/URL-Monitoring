@@ -125,6 +125,7 @@ function IncidentsContent() {
             logs = logsData.data || logsData.logs || logsData.urls || []
         }
 
+        console.log("📊 Deriving incidents from data:", logs.length, "URLs found")
 
 
         // Filter for failed checks and convert to incidents
@@ -135,6 +136,8 @@ function IncidentsContent() {
                 const isError = log.status === "Error" || log.status === "error"
                 const hasErrorCode = log.statusCode && log.statusCode >= 400
                 const hasError = log.errorMsg || log.error || log.errorMessage
+
+                console.log(`Checking ${log.name}: status="${log.status}", isDown=${isDown}, hasError=${hasErrorCode}`)
 
                 return isDown || isError || hasErrorCode || hasError
             })
@@ -165,6 +168,7 @@ function IncidentsContent() {
                 }
             })
 
+        console.log("🚨 Found incidents:", incidents.length, incidents)
 
         return incidents
     }
