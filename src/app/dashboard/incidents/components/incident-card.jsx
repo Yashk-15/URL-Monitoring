@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { IconAlertTriangle, IconChevronDown, IconClock, IconCheck, IconX } from "@tabler/icons-react"
+import { IconAlertTriangle, IconChevronDown, IconClock } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,30 +31,10 @@ const severityConfig = {
     },
 }
 
-const statusConfig = {
-    active: {
-        label: "Active",
-        variant: "destructive",
-        color: "text-red-600",
-    },
-    acknowledged: {
-        label: "Acknowledged",
-        variant: "secondary",
-        color: "text-yellow-600",
-    },
-    resolved: {
-        label: "Resolved",
-        variant: "default",
-        color: "text-green-600",
-    },
-}
-
 export function IncidentCard({ incident }) {
     const [isExpanded, setIsExpanded] = React.useState(false)
     const severity = incident.severity?.toLowerCase() || "info"
-    const status = incident.status?.toLowerCase() || "active"
     const config = severityConfig[severity] || severityConfig.info
-    const statusConf = statusConfig[status] || statusConfig.active
     const SeverityIcon = config.icon
 
     return (
@@ -80,24 +60,19 @@ export function IncidentCard({ incident }) {
                             </CardDescription>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant={statusConf.variant} className="capitalize">
-                            {statusConf.label}
-                        </Badge>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            onClick={() => setIsExpanded(!isExpanded)}
-                        >
-                            <IconChevronDown
-                                className={cn(
-                                    "size-4 transition-transform",
-                                    isExpanded && "rotate-180"
-                                )}
-                            />
-                        </Button>
-                    </div>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        onClick={() => setIsExpanded(!isExpanded)}
+                    >
+                        <IconChevronDown
+                            className={cn(
+                                "size-4 transition-transform",
+                                isExpanded && "rotate-180"
+                            )}
+                        />
+                    </Button>
                 </div>
             </CardHeader>
 
@@ -137,38 +112,24 @@ export function IncidentCard({ incident }) {
                             </div>
                         )}
 
-                        {incident.resolvedAt && (
+                        {incident.statusCode && (
                             <div>
-                                <div className="text-sm font-medium mb-1">Resolved At</div>
+                                <div className="text-sm font-medium mb-1">Status Code</div>
                                 <div className="text-sm text-muted-foreground">
-                                    {incident.resolvedAt}
+                                    {incident.statusCode}
                                 </div>
                             </div>
                         )}
 
-                        {incident.resolvedBy && (
+                        {incident.responseTime && (
                             <div>
-                                <div className="text-sm font-medium mb-1">Resolved By</div>
+                                <div className="text-sm font-medium mb-1">Response Time</div>
                                 <div className="text-sm text-muted-foreground">
-                                    {incident.resolvedBy}
+                                    {incident.responseTime}ms
                                 </div>
                             </div>
                         )}
                     </div>
-
-                    {/* Action Buttons */}
-                    {status === "active" && (
-                        <div className="flex items-center gap-2 pt-2 border-t">
-                            <Button size="sm" variant="outline">
-                                <IconCheck className="size-4 mr-1" />
-                                Acknowledge
-                            </Button>
-                            <Button size="sm" variant="default">
-                                <IconCheck className="size-4 mr-1" />
-                                Resolve
-                            </Button>
-                        </div>
-                    )}
                 </CardContent>
             )}
         </Card>

@@ -18,6 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import { apiClient } from "@/lib/api-client"
 
 function IncidentsContent() {
     const [incidents, setIncidents] = useState([])
@@ -36,80 +37,33 @@ function IncidentsContent() {
             setLoading(true)
             setError(null)
 
-            // Try to fetch from incidents endpoint (with authentication)
-            let response
-            try {
-                response = await apiClient.get('/incidents')
-            } catch (fetchError) {
-                console.warn("Incidents endpoint not available:", fetchError.message)
-                response = { ok: false, status: 404 }
+            // Since /incidents endpoint doesn't exist, directly fetch from /urls
+            console.log("Fetching URLs to derive incidents...")
+
+            const urlsResponse = await apiClient.get('/urls')
+
+            if (!urlsResponse.ok) {
+                console.warn("URLs endpoint returned error:", urlsResponse.status)
+                setIncidents([])
+                setFilteredIncidents([])
+                setLoading(false)
+                return
             }
 
-            if (!response.ok) {
-                // If incidents endpoint doesn't exist, derive from URLs endpoint
-                console.warn("Incidents endpoint not available, attempting to fetch from /urls")
+            const urlsResult = await urlsResponse.json()
+            console.log("URLs data received:", urlsResult)
 
-                try {
-                    const urlsResponse = await apiClient.get('/urls')
+            // Transform URLs into incidents
+            const derivedIncidents = deriveIncidentsFromLogs(urlsResult)
+            setIncidents(derivedIncidents)
+            setFilteredIncidents(derivedIncidents)
+            setLoading(false)
 
-                    if (!urlsResponse.ok) {
-                        // Show empty state instead of throwing error
-                        setIncidents([])
-                        setFilteredIncidents([])
-                        setLoading(false)
-                        return
-                    }
-
-                    const urlsResult = await urlsResponse.json()
-
-                    // Transform URLs into incidents
-                    const derivedIncidents = deriveIncidentsFromLogs(urlsResult)
-                    setIncidents(derivedIncidents)
-                    setFilteredIncidents(derivedIncidents)
-                    setLoading(false)
-                    return
-                } catch (urlsError) {
-                    console.warn("URLs endpoint not available:", urlsError.message)
-                    // Show empty state instead of error
-                    setIncidents([])
-                    setFilteredIncidents([])
-                    setLoading(false)
-                    return
-                }
-            }
-
-            const result = await response.json()
-
-            // Extract incidents array from response
-            let rawData = []
-            if (Array.isArray(result)) {
-                rawData = result
-            } else if (result && typeof result === 'object') {
-                rawData = result.data || result.incidents || []
-            }
-
-            // Transform API response to match component expectations
-            const transformedIncidents = rawData.map((incident) => ({
-                id: incident.id || incident.incidentId,
-                title: incident.title || incident.message || "Incident Detected",
-                description: incident.description || incident.details || "An issue was detected with the monitored endpoint",
-                severity: incident.severity?.toLowerCase() || (incident.status === "Down" ? "critical" : "warning"),
-                status: incident.status?.toLowerCase() || "active",
-                timestamp: incident.timestamp || incident.createdAt || new Date().toISOString(),
-                affectedUrls: incident.affectedUrls || (incident.url ? [incident.url] : []),
-                errorMessage: incident.errorMessage || incident.error,
-                resolvedAt: incident.resolvedAt,
-                resolvedBy: incident.resolvedBy,
-            }))
-
-            setIncidents(transformedIncidents)
-            setFilteredIncidents(transformedIncidents)
         } catch (err) {
             console.error("Error fetching incidents:", err)
             // Show empty state instead of error for network issues
             setIncidents([])
             setFilteredIncidents([])
-        } finally {
             setLoading(false)
         }
     }

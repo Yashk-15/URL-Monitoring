@@ -221,15 +221,6 @@ const columns = [
         ),
     },
     {
-        accessorKey: "region",
-        header: "Region",
-        cell: ({ row }) => (
-            <Badge variant="outline" className="text-muted-foreground px-1.5">
-                {row.original.region}
-            </Badge>
-        ),
-    },
-    {
         id: "actions",
         cell: () => (
             <DropdownMenu>

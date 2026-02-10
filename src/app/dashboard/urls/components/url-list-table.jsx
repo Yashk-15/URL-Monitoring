@@ -183,19 +183,6 @@ const columns = [
         ),
     },
     {
-        accessorKey: "region",
-        header: "Region",
-        cell: ({ row }) => (
-            <Badge variant="outline" className="text-muted-foreground px-2">
-                {row.original.region}
-            </Badge>
-        ),
-        filterFn: (row, id, value) => {
-            if (value === "all") return true
-            return row.getValue(id) === value
-        },
-    },
-    {
         id: "actions",
         cell: () => (
             <DropdownMenu>

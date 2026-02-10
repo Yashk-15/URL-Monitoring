@@ -17,6 +17,14 @@ export function SectionCards({ data = [], loading = false }) {
     const failedChecks = data.filter(url => url?.status === "Down").length
     const warningChecks = data.filter(url => url?.status === "Warning").length
 
+    // Calculate average uptime
+    const avgUptime = data.length > 0
+        ? (data.reduce((sum, url) => {
+            const uptime = url?.uptime ? parseFloat(url.uptime) : 0
+            return sum + uptime
+        }, 0) / data.length).toFixed(1)
+        : 0
+
     // Calculate average response time with safe parsing
     const avgResponseTime = data.length > 0
         ? Math.round(data.reduce((sum, url) => {
@@ -24,9 +32,6 @@ export function SectionCards({ data = [], loading = false }) {
             return sum + responseTime
         }, 0) / data.length)
         : 0
-
-    // Calculate unique regions with null filtering
-    const uniqueRegions = [...new Set(data.map(url => url?.region).filter(Boolean))].length
 
     // Calculate percentage of active monitors
     const activePercentage = totalURLs > 0 ? ((activeMonitors / totalURLs) * 100).toFixed(1) : 0
@@ -41,8 +46,8 @@ export function SectionCards({ data = [], loading = false }) {
                     </CardTitle>
                     <CardAction>
                         <Badge variant="outline">
-                            <IconWorld />
-                            {uniqueRegions} {uniqueRegions === 1 ? "region" : "regions"}
+                            <IconActivity />
+                            {avgUptime}% avg uptime
                         </Badge>
                     </CardAction>
                 </CardHeader>
@@ -51,7 +56,7 @@ export function SectionCards({ data = [], loading = false }) {
                         {activeMonitors === totalURLs ? "All endpoints active" : `${activeMonitors} active`} <IconWorld className="size-4" />
                     </div>
                     <div className="text-muted-foreground">
-                        Monitoring across {uniqueRegions} {uniqueRegions === 1 ? "region" : "regions"}
+                        {avgUptime >= 99 ? "Excellent uptime" : avgUptime >= 95 ? "Good uptime" : "Needs attention"}
                     </div>
                 </CardFooter>
             </Card>

@@ -14,13 +14,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { apiClient } from "@/lib/api-client"
 import { IconPlus } from "@tabler/icons-react"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
 
 export function AddURLDialog({ onURLAdded }) {
     const [open, setOpen] = useState(false)
@@ -30,7 +23,6 @@ export function AddURLDialog({ onURLAdded }) {
     const [formData, setFormData] = useState({
         name: "",
         url: "",
-        region: "ap-south-1",
         expectedStatus: "200",
         maxLatencyMs: "3000",
         timeoutSeconds: "5"
@@ -49,7 +41,6 @@ export function AddURLDialog({ onURLAdded }) {
                 URLid: URLid,
                 name: formData.name,
                 url: formData.url,
-                region: formData.region,
                 enabled: true,
                 expectedStatus: parseInt(formData.expectedStatus),
                 maxLatencyMs: parseInt(formData.maxLatencyMs),
@@ -64,7 +55,6 @@ export function AddURLDialog({ onURLAdded }) {
             setFormData({
                 name: "",
                 url: "",
-                region: "ap-south-1",
                 expectedStatus: "200",
                 maxLatencyMs: "3000",
                 timeoutSeconds: "5"
@@ -127,26 +117,6 @@ export function AddURLDialog({ onURLAdded }) {
                                     onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                                     required
                                 />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="region">Region</Label>
-                                <Select
-                                    value={formData.region}
-                                    onValueChange={(value) => setFormData({ ...formData, region: value })}
-                                >
-                                    <SelectTrigger id="region">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="ap-south-1">Asia Pacific (Mumbai)</SelectItem>
-                                        <SelectItem value="us-east-1">US East (N. Virginia)</SelectItem>
-                                        <SelectItem value="us-west-2">US West (Oregon)</SelectItem>
-                                        <SelectItem value="eu-west-1">Europe (Ireland)</SelectItem>
-                                        <SelectItem value="ap-southeast-1">Asia Pacific (Singapore)</SelectItem>
-                                        <SelectItem value="global">Global</SelectItem>
-                                    </SelectContent>
-                                </Select>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
