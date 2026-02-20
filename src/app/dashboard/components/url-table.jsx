@@ -44,6 +44,7 @@ import {
 } from "@tanstack/react-table"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import { apiClient } from "@/lib/api-client"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -238,9 +239,9 @@ function buildColumns(onRefresh) {
 function RowActions({ row, onRefresh }) {
     const url = row.original
     const router = useRouter()
+    const [isDeleting, setIsDeleting] = React.useState(false)
 
     const handleViewDetails = () => {
-        // Navigate to the URLs page using Next.js router (no full-page reload)
         router.push(`/dashboard/urls`)
     }
 
@@ -253,6 +254,36 @@ function RowActions({ row, onRefresh }) {
         toast.success("URL copied to clipboard")
     }
 
+    const handleDelete = async () => {
+        if (!confirm(`Delete "${url.name}" from monitoring? This cannot be undone.`)) return
+        setIsDeleting(true)
+        try {
+            const urlId = url.id || url.URLid
+            const res = await apiClient.delete(`/urls/${urlId}`)
+            if (!res.ok) {
+                const body = await res.text().catch(() => '')
+                throw new Error(`Server returned ${res.status}: ${body}`)
+            }
+            toast.success(`"${url.name}" deleted from monitoring`)
+            if (onRefresh) onRefresh()
+        } catch (err) {
+            console.error('[delete]', err)
+            // "Failed to fetch" means a CORS or network error — the DELETE method
+            // likely isn't enabled in API Gateway for this route
+            if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+                toast.error(
+                    'Delete failed: The API does not support DELETE requests yet. ' +
+                    'Enable DELETE method for /urls/{id} in AWS API Gateway and redeploy.',
+                    { duration: 8000 }
+                )
+            } else {
+                toast.error(`Failed to delete: ${err.message || 'Unknown error'}`)
+            }
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -260,6 +291,7 @@ function RowActions({ row, onRefresh }) {
                     variant="ghost"
                     className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
                     size="icon"
+                    disabled={isDeleting}
                 >
                     <IconDotsVertical className="size-4" />
                     <span className="sr-only">Open menu</span>
@@ -276,11 +308,6 @@ function RowActions({ row, onRefresh }) {
                     Copy URL
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {/* 
-                    DELETE / EDIT / PAUSE: Disabled — backend routes 
-                    DELETE /urls/{id} and PUT /urls/{id} do not exist yet.
-                    Enable these once the routes are added to API Gateway.
-                */}
                 <DropdownMenuItem
                     disabled
                     className="text-muted-foreground cursor-not-allowed"
@@ -289,12 +316,11 @@ function RowActions({ row, onRefresh }) {
                     Edit (coming soon)
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                    disabled
-                    variant="destructive"
-                    className="cursor-not-allowed opacity-50"
-                    title="Delete not yet available"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
                 >
-                    Delete (coming soon)
+                    {isDeleting ? 'Deleting...' : 'Delete'}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

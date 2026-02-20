@@ -13,10 +13,10 @@ import {
 } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { IconRefresh } from "@tabler/icons-react"
+import { IconPlus, IconRefresh } from "@tabler/icons-react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { apiClient, extractArray, normaliseURL } from "@/lib/api-client"
-import { useAutoRefresh } from "@/hooks/use-auto-refresh"
+import { AddURLDialog } from "@/app/dashboard/urls/components/add-url-dialog"
 import { toast } from "sonner"
 
 // Tab value ↔ query-param mapping
@@ -102,10 +102,7 @@ function DashboardContent() {
         fetchURLs()
     }, [fetchURLs])
 
-    // Auto-refresh every 30 seconds — always run as background (isManual=true)
-    // so the full loading spinner never re-appears after initial load
-    const silentRefresh = useCallback(() => fetchURLs(true), [fetchURLs])
-    useAutoRefresh(silentRefresh, 30000, true)
+    // Auto-refresh disabled — use the manual Refresh button instead
 
     const filteredData = data.filter((item) => {
         if (activeTab === "all") return true
@@ -193,6 +190,7 @@ function DashboardContent() {
                                             <IconRefresh className={isRefreshing ? "animate-spin" : ""} />
                                             {isRefreshing ? "Refreshing..." : "Refresh"}
                                         </Button>
+                                        <AddURLDialog onURLAdded={fetchURLs} />
                                     </div>
                                 </div>
 

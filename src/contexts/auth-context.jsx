@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { signUp, signIn, signOut, getCurrentUser, confirmSignUp } from "aws-amplify/auth"
+import { signUp, signIn, signOut, getCurrentUser, confirmSignUp, fetchUserAttributes } from "aws-amplify/auth"
 import "../lib/amplify-config"
 
 const AuthContext = createContext({})
@@ -20,11 +20,21 @@ export function AuthProvider({ children }) {
     const checkUser = async () => {
         try {
             const currentUser = await getCurrentUser()
+            // Fetch real user attributes (name, email) set during sign-up
+            let attrs = {}
+            try {
+                attrs = await fetchUserAttributes()
+            } catch {
+                // fetchUserAttributes can fail in some edge cases — fall back gracefully
+            }
+            const email = attrs.email || currentUser.signInDetails?.loginId || ''
+            // Use the 'name' attribute if set, otherwise derive from email
+            const name = attrs.name || email.split('@')[0] || 'User'
 
             setUser({
                 id: currentUser.userId,
-                email: currentUser.signInDetails?.loginId,
-                name: currentUser.username,
+                email,
+                name,
             })
         } catch (error) {
             setUser(null)
