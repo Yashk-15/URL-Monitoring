@@ -45,8 +45,7 @@ function deriveIncidents(logs, urlMap) {
         const urlHref = urlInfo.url || ""
 
         let severity = "warning"
-        if (!log.isUp && log.statusCode >= 500) severity = "critical"
-        else if (!log.isUp) severity = "critical"
+        if (!log.isUp) severity = "critical"
         else if (log.isSlow) severity = "warning"
         else if (log.statusCode >= 400) severity = "warning"
 
@@ -94,35 +93,58 @@ function IncidentsContent() {
             setLoading(true)
             setError(null)
 
-            // Fetch both in parallel
-            const [logsRes, urlsRes] = await Promise.all([
-                apiClient.get('/logs?limit=500'),
-                apiClient.get('/urls'),
-            ])
+            // Step 1: get all URLs for this user
+            const urlsRes = await apiClient.get('/urls')
+            if (!urlsRes.ok) {
+                throw new Error(`Failed to load URLs: HTTP ${urlsRes.status}`)
+            }
+            const urlsResult = await urlsRes.json()
+            const urls = extractArray(urlsResult)
 
-            // Parse URLs to build a name/href map keyed by URLid
-            let urlMap = {}
-            if (urlsRes.ok) {
-                const urlsResult = await urlsRes.json()
-                const urls = extractArray(urlsResult)
-                for (const u of urls) {
-                    const key = u.URLid || u.id
-                    if (key) urlMap[key] = { name: u.name, url: u.url }
-                }
+            // Build a name/href map keyed by URLid
+            const urlMap = {}
+            for (const u of urls) {
+                const key = u.URLid || u.id
+                if (key) urlMap[key] = { name: u.name, url: u.url }
             }
 
-            if (!logsRes.ok) {
-                console.warn('[Incidents] /logs returned', logsRes.status)
+            if (urls.length === 0) {
                 setIncidents([])
                 setFilteredIncidents([])
                 return
             }
 
-            const logsResult = await logsRes.json()
-            const rawLogs = extractArray(logsResult)
-            const normalisedLogs = rawLogs.map(normaliseLog)
-            const derived = deriveIncidents(normalisedLogs, urlMap)
+            // Step 2: fetch logs per URL in parallel (Lambda requires ?urlId=X)
+            const urlsToQuery = urls.slice(0, 10) // cap to avoid hammering Lambda
+            const logResponses = await Promise.all(
+                urlsToQuery.map(async (u) => {
+                    const urlId = u.URLid || u.id
+                    if (!urlId) return []
+                    try {
+                        const res = await apiClient.get(`/logs?urlId=${encodeURIComponent(urlId)}`)
+                        if (!res.ok) {
+                            console.warn(`[Incidents] /logs?urlId=${urlId} → ${res.status}`)
+                            return []
+                        }
+                        const raw = await res.json()
+                        return extractArray(raw).map(normaliseLog)
+                    } catch (err) {
+                        console.error(`[Incidents] error fetching logs for ${urlId}:`, err)
+                        return []
+                    }
+                })
+            )
 
+            const rawLogs = logResponses.flat()
+            console.log('[Incidents] total log entries:', rawLogs.length)
+
+            if (rawLogs.length === 0) {
+                setIncidents([])
+                setFilteredIncidents([])
+                return
+            }
+
+            const derived = deriveIncidents(rawLogs, urlMap)
             setIncidents(derived)
             setFilteredIncidents(derived)
         } catch (err) {

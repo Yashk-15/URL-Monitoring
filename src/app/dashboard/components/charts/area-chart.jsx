@@ -88,48 +88,83 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
     const [timeRange, setTimeRange] = React.useState("30d")
     const [logs, setLogs] = React.useState([])
     const [loadingLogs, setLoadingLogs] = React.useState(false)
-    const [logsError, setLogsError] = React.useState(null) // 'cors' | 'notfound' | 'auth' | 'unknown'
+    const [logsError, setLogsError] = React.useState(null)
 
     React.useEffect(() => {
         if (isMobile) setTimeRange("7d")
     }, [isMobile])
 
+    /**
+     * Stable dependency: a sorted, comma-joined string of URL IDs.
+     * This only changes when the actual set of monitored URLs changes,
+     * NOT on every 30-second auto-refresh that returns the same IDs.
+     */
+    const urlIdString = React.useMemo(
+        () => (urlData || []).map((u) => u.id || u.URLid).filter(Boolean).sort().join(','),
+        [urlData]
+    )
+
     React.useEffect(() => {
-        async function fetchLogs() {
+        if (!urlIdString) return
+
+        async function fetchLogsForURLs() {
             setLoadingLogs(true)
             setLogsError(null)
+
+            // Lambda requires ?urlId=X — fetch per URL in parallel (up to 5)
+            const urlsToFetch = (urlData || []).filter((u) => u.id || u.URLid).slice(0, 5)
+            console.log('[Chart] Fetching logs for', urlsToFetch.length, 'URLs:', urlsToFetch.map(u => u.id || u.URLid))
+
             try {
-                const response = await apiClient.get('/logs?limit=500')
-                if (response.status === 404) {
-                    setLogsError('notfound')
-                    setLogs([])
-                    return
+                let firstError = null
+
+                const results = await Promise.all(
+                    urlsToFetch.map(async (url) => {
+                        const urlId = url.id || url.URLid
+                        try {
+                            // Lambda: GET /logs?urlId=X — ownership verified server-side
+                            const response = await apiClient.get(`/logs?urlId=${encodeURIComponent(urlId)}`)
+                            console.log(`[Chart] /logs?urlId=${urlId} → HTTP ${response.status}`)
+                            if (!response.ok) {
+                                let body = ''
+                                try { body = await response.text() } catch { }
+                                console.warn(`[Chart] /logs error body (${response.status}):`, body)
+                                if (!firstError) {
+                                    if (response.status === 400) firstError = 'badrequest'
+                                    else if (response.status === 404) firstError = 'notfound'
+                                    else if (response.status === 401 || response.status === 403) firstError = 'auth'
+                                    else firstError = `HTTP ${response.status}`
+                                }
+                                return []
+                            }
+                            const result = await response.json()
+                            console.log(`[Chart] /logs?urlId=${urlId} →`, Array.isArray(result) ? result.length : result, 'entries')
+                            return extractArray(result).map(normaliseLog)
+                        } catch (err) {
+                            const isCors = err instanceof TypeError && err.message.includes('fetch')
+                            console.error(`[Chart] fetch error for ${urlId}:`, err)
+                            if (!firstError) firstError = isCors ? 'cors' : err.message || 'unknown'
+                            return []
+                        }
+                    })
+                )
+
+                if (firstError) {
+                    console.warn('[Chart] logsError:', firstError)
+                    setLogsError(firstError)
                 }
-                if (response.status === 401 || response.status === 403) {
-                    setLogsError('auth')
-                    setLogs([])
-                    return
-                }
-                if (!response.ok) {
-                    setLogsError('unknown')
-                    setLogs([])
-                    return
-                }
-                const result = await response.json()
-                const raw = extractArray(result)
-                setLogs(raw.map(normaliseLog))
-            } catch (err) {
-                // TypeError: Failed to fetch = CORS or network error
-                const isCors = err instanceof TypeError && err.message.includes('fetch')
-                setLogsError(isCors ? 'cors' : 'unknown')
-                console.warn('[ChartAreaInteractive] /logs unavailable:', err.message)
-                setLogs([])
+
+                const allLogs = results.flat()
+                console.log('[Chart] Total log entries:', allLogs.length, allLogs[0])
+                setLogs(allLogs)
             } finally {
                 setLoadingLogs(false)
             }
         }
-        fetchLogs()
-    }, [])
+
+        fetchLogsForURLs()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [urlIdString])
 
     const days = timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : 90
 
@@ -158,12 +193,16 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
                     {loadingLogs
                         ? "Loading historical data..."
                         : logsError === 'cors'
-                            ? "⚠ CORS not enabled on /logs — configure in API Gateway"
-                            : logsError === 'notfound'
-                                ? "⚠ /logs route returned 404 — check Lambda deployment"
-                                : hasData
-                                    ? `${avgAll}ms average across all monitors`
-                                    : "No log data yet — history appears once monitors run"}
+                            ? "⚠ CORS error on /logs — configure in API Gateway"
+                            : logsError === 'badrequest'
+                                ? "⚠ /logs returned 400 — check Lambda query param support"
+                                : logsError === 'notfound'
+                                    ? "⚠ /logs route not found — check Lambda deployment"
+                                    : logsError && logsError !== 'auth'
+                                        ? `⚠ ${logsError} — check browser console for details`
+                                        : hasData
+                                            ? `${avgAll}ms average across all monitors`
+                                            : "No log data yet — history appears once monitors run"}
                 </CardDescription>
                 <CardAction>
                     <ToggleGroup
@@ -171,7 +210,7 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
                         value={timeRange}
                         onValueChange={(v) => v && setTimeRange(v)}
                         variant="outline"
-                        className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
+                        className="hidden *:data-[slot=toggle-group-item]:px-4! @[767px]/card:flex"
                     >
                         <ToggleGroupItem value="90d">Last 3 months</ToggleGroupItem>
                         <ToggleGroupItem value="30d">Last 30 days</ToggleGroupItem>
@@ -207,17 +246,26 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
                             {logsError === 'cors' ? (
                                 <>
                                     <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-1">
-                                        CORS not configured on /logs
+                                        CORS error on /logs
                                     </p>
                                     <p className="text-xs">
-                                        Go to API Gateway → CORS and enable it for the /logs route,
-                                        then redeploy. The /urls route works — only /logs is missing OPTIONS.
+                                        Go to API Gateway → CORS, enable OPTIONS for /logs, then redeploy.
+                                    </p>
+                                </>
+                            ) : logsError === 'badrequest' ? (
+                                <>
+                                    <p className="text-sm font-semibold text-orange-600 dark:text-orange-400 mb-1">
+                                        /logs returned 400 Bad Request
+                                    </p>
+                                    <p className="text-xs">
+                                        The Lambda rejected the query. Check what parameters
+                                        your /logs Lambda expects (e.g. urlId format, required fields).
                                     </p>
                                 </>
                             ) : logsError === 'notfound' ? (
                                 <>
                                     <p className="text-sm font-semibold mb-1">Route not found (404)</p>
-                                    <p className="text-xs">/logs returned 404. Check your Lambda is deployed and the route integration is set.</p>
+                                    <p className="text-xs">/logs returned 404. Check your Lambda is deployed and route integration is set.</p>
                                 </>
                             ) : (
                                 <>
@@ -304,4 +352,3 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
         </Card>
     )
 }
-

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { signUp, signIn, signOut, getCurrentUser, fetchAuthSession, confirmSignUp } from "aws-amplify/auth"
+import { signUp, signIn, signOut, getCurrentUser, confirmSignUp } from "aws-amplify/auth"
 import "../lib/amplify-config"
 
 const AuthContext = createContext({})
@@ -20,13 +20,11 @@ export function AuthProvider({ children }) {
     const checkUser = async () => {
         try {
             const currentUser = await getCurrentUser()
-            const session = await fetchAuthSession()
 
             setUser({
                 id: currentUser.userId,
                 email: currentUser.signInDetails?.loginId,
                 name: currentUser.username,
-                token: session.tokens?.idToken?.toString(),
             })
         } catch (error) {
             setUser(null)
@@ -118,9 +116,6 @@ export function AuthProvider({ children }) {
         }
     }
 
-    const getToken = () => {
-        return user?.token || null
-    }
 
     return (
         <AuthContext.Provider value={{
@@ -130,7 +125,6 @@ export function AuthProvider({ children }) {
             signup,
             confirmSignup,
             logout,
-            getToken
         }}>
             {children}
         </AuthContext.Provider>

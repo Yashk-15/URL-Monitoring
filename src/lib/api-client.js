@@ -149,7 +149,8 @@ export function normaliseLog(raw) {
     return {
         urlId: raw.URLid || raw.urlId || '',
         timestamp: raw.Timestamp || raw.timestamp || '',
-        responseTime: parseInt(raw.responseTime || raw.ResponseTime || 0),
+        // Lambda stores response time as latencyMs in URL_Health_details table
+        responseTime: parseInt(raw.latencyMs || raw.responseTime || raw.ResponseTime || raw.LatencyMs || 0),
         statusCode: raw.statusCode || raw.StatusCode || null,
         status: raw.status || (raw.isUp ? 'Up' : 'Down') || 'Unknown',
         errorMsg: raw.errorMsg || raw.error || null,

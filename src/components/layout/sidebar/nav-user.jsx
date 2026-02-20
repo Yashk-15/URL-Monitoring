@@ -26,10 +26,12 @@ import {
     useSidebar,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
 
 export function NavUser({ user }) {
     const { isMobile } = useSidebar()
     const { logout } = useAuth()
+    const router = useRouter()
 
     const initials = user.name
         ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
@@ -84,7 +86,7 @@ export function NavUser({ user }) {
 
                         {/* Profile — navigates to settings tab */}
                         <DropdownMenuItem
-                            onClick={() => window.location.href = '/dashboard?view=settings'}
+                            onClick={() => router.push('/dashboard?view=settings')}
                             className="cursor-pointer"
                         >
                             <IconUserCircle className="size-4" />

@@ -89,8 +89,9 @@ function DashboardContent() {
                 toast.error("Failed to refresh data")
             }
         } finally {
-            setLoading(false)
-            setIsRefreshing(false)
+            // Only reset the flag that was set at the start
+            if (isManual) setIsRefreshing(false)
+            else setLoading(false)
         }
     }, [])
 
@@ -170,6 +171,9 @@ function DashboardContent() {
                                                 </span>
                                             )}
                                         </TabsTrigger>
+                                        <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                                        <TabsTrigger value="settings">Settings</TabsTrigger>
+                                        <TabsTrigger value="reports">Reports</TabsTrigger>
                                     </TabsList>
 
                                     <div className="flex items-center gap-3">

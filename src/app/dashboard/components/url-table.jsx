@@ -29,6 +29,7 @@ import {
     IconGripVertical,
     IconLayoutColumns,
     IconLoader,
+    IconAlertTriangle,
     IconExternalLink,
 } from "@tabler/icons-react"
 import {
@@ -42,6 +43,7 @@ import {
     useReactTable,
 } from "@tanstack/react-table"
 import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -108,7 +110,7 @@ function StatusBadge({ status }) {
     if (status === "Warning") {
         return (
             <Badge className="px-1.5 gap-1 bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-400">
-                <IconLoader className="size-3" />
+                <IconAlertTriangle className="size-3" />
                 Warning
             </Badge>
         )
@@ -235,10 +237,11 @@ function buildColumns(onRefresh) {
 
 function RowActions({ row, onRefresh }) {
     const url = row.original
+    const router = useRouter()
 
     const handleViewDetails = () => {
-        // Navigate to the URLs page and expand this item
-        window.location.href = `/dashboard/urls`
+        // Navigate to the URLs page using Next.js router (no full-page reload)
+        router.push(`/dashboard/urls`)
     }
 
     const handleOpenURL = () => {
@@ -306,7 +309,7 @@ function DraggableRow({ row }) {
     return (
         <TableRow
             data-state={row.getIsSelected() && "selected"}
-            data-dragging={isDragging}
+            data-dragging={isDragging ? "true" : "false"}
             ref={setNodeRef}
             className="relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80"
             style={{
@@ -404,16 +407,23 @@ export function DataTable({ data: initialData, onRefresh }) {
                         {table
                             .getAllColumns()
                             .filter((col) => typeof col.accessorFn !== "undefined" && col.getCanHide())
-                            .map((col) => (
-                                <DropdownMenuCheckboxItem
-                                    key={col.id}
-                                    className="capitalize"
-                                    checked={col.getIsVisible()}
-                                    onCheckedChange={(value) => col.toggleVisibility(!!value)}
-                                >
-                                    {col.id}
-                                </DropdownMenuCheckboxItem>
-                            ))}
+                            .map((col) => {
+                                // Show human-readable label extracted from column header definition
+                                const headerDef = col.columnDef.header
+                                const label = typeof headerDef === "string"
+                                    ? headerDef
+                                    : { url: "URL", status: "Status", responseTime: "Response Time", uptime: "Uptime", lastCheck: "Last Check" }[col.id] || col.id
+                                return (
+                                    <DropdownMenuCheckboxItem
+                                        key={col.id}
+                                        className="capitalize"
+                                        checked={col.getIsVisible()}
+                                        onCheckedChange={(value) => col.toggleVisibility(!!value)}
+                                    >
+                                        {label}
+                                    </DropdownMenuCheckboxItem>
+                                )
+                            })}
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
