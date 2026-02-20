@@ -102,8 +102,10 @@ function DashboardContent() {
         fetchURLs()
     }, [fetchURLs])
 
-    // Auto-refresh every 30 seconds
-    useAutoRefresh(fetchURLs, 30000, true)
+    // Auto-refresh every 30 seconds — always run as background (isManual=true)
+    // so the full loading spinner never re-appears after initial load
+    const silentRefresh = useCallback(() => fetchURLs(true), [fetchURLs])
+    useAutoRefresh(silentRefresh, 30000, true)
 
     const filteredData = data.filter((item) => {
         if (activeTab === "all") return true
