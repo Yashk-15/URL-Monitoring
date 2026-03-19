@@ -1,7 +1,16 @@
 "use client"
 
 import * as React from "react"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import {
+    Area,
+    AreaChart,
+    CartesianGrid,
+    ReferenceLine,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from "recharts"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
@@ -12,11 +21,6 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import {
-    ChartContainer,
-    ChartTooltip,
-    ChartTooltipContent,
-} from "@/components/ui/chart"
 import {
     Select,
     SelectContent,
@@ -30,40 +34,27 @@ import {
 } from "@/components/ui/toggle-group"
 import { apiClient, extractArray, normaliseLog } from "@/lib/api-client"
 
-const chartConfig = {
-    avgResponseTime: {
-        label: "Avg Response (ms)",
-        color: "var(--primary)",
-    },
-}
+const CHART_COLOR = "#6366f1" // indigo
 
 /**
- * Bucket log entries into time slots and compute avg response time per slot.
- *
- * KEY: Uses 2-hour slots for 7d view (84 total slots).
- * The Lambda returns Limit:25 entries per URL, typically covering
- * just the last few hours. Daily bucketing collapses all of that
- * into 1 bucket out of 30, which Recharts can't render as a visible
- * area. 2-hour slots spread recent data across multiple visible buckets.
+ * Bucket ALL log entries (across all URLs) into time slots.
+ * Each slot gets the cumulative average response time.
+ * Null = no data that slot (renders as a gap, not a fake line).
  */
 function bucketLogs(logs, timeRange) {
     const now = new Date()
     const days = timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : 90
+    // Use hourly slots when there are ≤30 data points, else daily
     const useHourly = timeRange === "7d"
-
-    // 2-hour slots for 7d; daily slots for 30d/90d
     const slotMs = useHourly ? 2 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
     const totalSlots = useHourly ? days * 12 : days
-
     const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
 
-    // Filter logs to the selected window
-    const filtered = logs.filter((log) => {
-        const ts = new Date(log.timestamp)
+    const filtered = logs.filter((l) => {
+        const ts = new Date(l.timestamp)
         return ts >= cutoff && ts <= now
     })
 
-    // Group by slot index
     const bySlot = {}
     for (const log of filtered) {
         const ts = new Date(log.timestamp)
@@ -73,18 +64,22 @@ function bucketLogs(logs, timeRange) {
         bySlot[idx].push(log.responseTime)
     }
 
-    // Build one result entry per slot (null = no data that slot)
     const result = []
     for (let i = 0; i < totalSlots; i++) {
         const slotStart = new Date(cutoff.getTime() + i * slotMs)
         const values = bySlot[i] || []
-        result.push({
-            date: slotStart.toISOString(),
-            avgResponseTime: values.length
-                ? Math.round(values.reduce((s, v) => s + v, 0) / values.length)
-                : null,
-            checkCount: values.length,
-        })
+        if (values.length === 0) {
+            result.push({ date: slotStart.toISOString(), avg: null, min: null, max: null, count: 0 })
+        } else {
+            const avg = Math.round(values.reduce((s, v) => s + v, 0) / values.length)
+            result.push({
+                date: slotStart.toISOString(),
+                avg,
+                min: Math.min(...values),
+                max: Math.max(...values),
+                count: values.length,
+            })
+        }
     }
     return result
 }
@@ -101,6 +96,63 @@ function formatTick(isoStr, timeRange) {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
+// Custom tooltip that shows url name + stats
+function CustomTooltip({ active, payload, label, timeRange }) {
+    if (!active || !payload?.length) return null
+    const d = new Date(label)
+    const dateStr = d.toLocaleString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: timeRange === "7d" ? "numeric" : undefined,
+        minute: timeRange === "7d" ? "2-digit" : undefined,
+    })
+    return (
+        <div className="rounded-xl border bg-background shadow-xl px-3 py-2.5 text-sm min-w-[160px]">
+            <p className="text-muted-foreground text-xs mb-2 font-medium">{dateStr}</p>
+            {payload.map((p) => {
+                const { avg, min, max, count } = p.payload
+                if (avg === null) return null
+                return (
+                    <div key={p.dataKey} className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between gap-4">
+                            <span className="flex items-center gap-1.5">
+                                <span className="inline-block w-2 h-2 rounded-full" style={{ background: p.color }} />
+                                <span className="font-semibold">{avg}ms</span>
+                            </span>
+                            <span className="text-muted-foreground text-xs">{count} check{count !== 1 ? "s" : ""}</span>
+                        </div>
+                        {min !== max && (
+                            <p className="text-muted-foreground text-xs">
+                                Range: {min}ms – {max}ms
+                            </p>
+                        )}
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
+// Empty state illustration
+function EmptyState({ message, sub }) {
+    return (
+        <div className="h-[250px] flex flex-col items-center justify-center gap-3 text-muted-foreground select-none">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" className="opacity-30">
+                <rect x="4" y="32" width="6" height="12" rx="2" fill="currentColor" />
+                <rect x="14" y="22" width="6" height="22" rx="2" fill="currentColor" />
+                <rect x="24" y="14" width="6" height="30" rx="2" fill="currentColor" />
+                <rect x="34" y="26" width="6" height="18" rx="2" fill="currentColor" />
+                <path d="M6 28 L16 20 L26 10 L36 22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <div className="text-center">
+                <p className="text-sm font-medium">{message}</p>
+                {sub && <p className="text-xs mt-0.5 max-w-xs">{sub}</p>}
+            </div>
+        </div>
+    )
+}
+
 export function ChartAreaInteractive({ data: urlData = [] }) {
     const isMobile = useIsMobile()
     const [timeRange, setTimeRange] = React.useState("7d")
@@ -112,11 +164,6 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
         if (isMobile) setTimeRange("7d")
     }, [isMobile])
 
-    /**
-     * Stable dependency: sorted comma-joined URL ID string.
-     * Only changes when the actual set of monitored URLs changes,
-     * not on every 30-second auto-refresh with identical IDs.
-     */
     const urlIdString = React.useMemo(
         () =>
             (urlData || [])
@@ -134,20 +181,12 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
             setLoadingLogs(true)
             setLogsError(null)
 
-            // Lambda requires ?urlId=X — fetch per URL in parallel (up to 5)
             const urlsToFetch = (urlData || [])
                 .filter((u) => u.id || u.URLid)
-                .slice(0, 5)
-            console.log(
-                "[Chart] Fetching logs for",
-                urlsToFetch.length,
-                "URLs:",
-                urlsToFetch.map((u) => u.id || u.URLid)
-            )
+                .slice(0, 5) // max 5 URLs for performance
 
             try {
                 let firstError = null
-
                 const results = await Promise.all(
                     urlsToFetch.map(async (url) => {
                         const urlId = url.id || url.URLid
@@ -155,62 +194,25 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
                             const response = await apiClient.get(
                                 `/logs?urlId=${encodeURIComponent(urlId)}`
                             )
-                            console.log(
-                                `[Chart] /logs?urlId=${urlId} → HTTP ${response.status}`
-                            )
                             if (!response.ok) {
-                                let body = ""
-                                try {
-                                    body = await response.text()
-                                } catch { }
-                                console.warn(
-                                    `[Chart] /logs error body (${response.status}):`,
-                                    body
-                                )
-                                if (!firstError) {
-                                    if (response.status === 400)
-                                        firstError = "badrequest"
-                                    else if (response.status === 404)
-                                        firstError = "notfound"
-                                    else if (
-                                        response.status === 401 ||
-                                        response.status === 403
-                                    )
-                                        firstError = "auth"
-                                    else firstError = `HTTP ${response.status}`
-                                }
+                                if (!firstError) firstError = `HTTP ${response.status}`
                                 return []
                             }
                             const result = await response.json()
-                            console.log(
-                                `[Chart] /logs?urlId=${urlId} →`,
-                                Array.isArray(result) ? result.length : result,
-                                "entries"
-                            )
-                            return extractArray(result).map(normaliseLog)
+                            return extractArray(result).map((l) => ({
+                                ...normaliseLog(l),
+                                urlId,
+                                urlName: url.name || url.url || urlId,
+                            }))
                         } catch (err) {
-                            const isCors =
-                                err instanceof TypeError &&
-                                err.message.includes("fetch")
-                            console.error(
-                                `[Chart] fetch error for ${urlId}:`,
-                                err
-                            )
-                            if (!firstError)
-                                firstError = isCors ? "cors" : err.message || "unknown"
+                            if (!firstError) firstError = err.message || "unknown"
                             return []
                         }
                     })
                 )
 
-                if (firstError) {
-                    console.warn("[Chart] logsError:", firstError)
-                    setLogsError(firstError)
-                }
-
-                const allLogs = results.flat()
-                console.log("[Chart] Total log entries:", allLogs.length, allLogs[0])
-                setLogs(allLogs)
+                if (firstError) setLogsError(firstError)
+                setLogs(results.flat())
             } finally {
                 setLoadingLogs(false)
             }
@@ -220,41 +222,40 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [urlIdString])
 
+    // Single cumulative chartData — all URLs bucketed together
     const chartData = React.useMemo(() => {
-        if (logs.length === 0) return []
+        if (!logs.length) return []
         return bucketLogs(logs, timeRange)
     }, [logs, timeRange])
 
-    const hasData = chartData.some((d) => d.avgResponseTime !== null)
+    const hasData = chartData.some((d) => d.avg !== null)
 
-    const avgAll = hasData
-        ? Math.round(
-            chartData
-                .filter((d) => d.avgResponseTime !== null)
-                .reduce((s, d) => s + d.avgResponseTime, 0) /
-            chartData.filter((d) => d.avgResponseTime !== null).length
-        )
-        : null
+    const avgAll = React.useMemo(() => {
+        const vals = chartData.filter((d) => d.avg !== null).map((d) => d.avg)
+        return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : null
+    }, [chartData])
+
+    // Y-axis: scale to 20% above the peak value
+    const yMax = React.useMemo(() => {
+        const peak = Math.max(0, ...chartData.map((d) => d.avg ?? 0))
+        return peak ? Math.ceil(peak * 1.2) : 500
+    }, [chartData])
+
+    const subtitle = loadingLogs && !logs.length
+        ? "Loading historical data..."
+        : logsError
+            ? `⚠ ${logsError}`
+            : hasData
+                ? `${avgAll}ms average across all monitors`
+                : "No history yet — data appears once monitors start checking"
 
     return (
         <Card className="@container/card">
             <CardHeader>
-                <CardTitle>Response Time Trends</CardTitle>
-                <CardDescription>
-                    {loadingLogs && logs.length === 0
-                        ? "Loading historical data..."
-                        : logsError === "cors"
-                            ? "⚠ CORS error on /logs — configure in API Gateway"
-                            : logsError === "badrequest"
-                                ? "⚠ /logs returned 400 — check Lambda query param support"
-                                : logsError === "notfound"
-                                    ? "⚠ /logs route not found — check Lambda deployment"
-                                    : logsError && logsError !== "auth"
-                                        ? `⚠ ${logsError} — check browser console for details`
-                                        : hasData
-                                            ? `${avgAll}ms average across all monitors`
-                                            : "No log data yet — history appears once monitors run"}
-                </CardDescription>
+                <div>
+                    <CardTitle>Response Time Trends</CardTitle>
+                    <CardDescription className="mt-1">{subtitle}</CardDescription>
+                </div>
                 <CardAction>
                     <ToggleGroup
                         type="single"
@@ -275,172 +276,107 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
                             <SelectValue placeholder="Last 7 days" />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
-                            <SelectItem value="90d" className="rounded-lg">
-                                Last 3 months
-                            </SelectItem>
-                            <SelectItem value="30d" className="rounded-lg">
-                                Last 30 days
-                            </SelectItem>
-                            <SelectItem value="7d" className="rounded-lg">
-                                Last 7 days
-                            </SelectItem>
+                            <SelectItem value="90d">Last 3 months</SelectItem>
+                            <SelectItem value="30d">Last 30 days</SelectItem>
+                            <SelectItem value="7d">Last 7 days</SelectItem>
                         </SelectContent>
                     </Select>
                 </CardAction>
             </CardHeader>
-            <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-                {/* Spinner only on first load — keep stale chart visible during re-fetches */}
-                {loadingLogs && logs.length === 0 ? (
+
+            <CardContent className="px-2 pt-2 sm:px-6 sm:pt-4">
+                {loadingLogs && !logs.length ? (
                     <div className="h-[250px] flex items-center justify-center">
                         <div className="text-center">
                             <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary mb-2" />
-                            <p className="text-sm text-muted-foreground">
-                                Loading chart data...
-                            </p>
+                            <p className="text-sm text-muted-foreground">Loading chart data...</p>
                         </div>
                     </div>
                 ) : !hasData ? (
-                    <div className="h-[250px] flex items-center justify-center">
-                        <div className="text-center text-muted-foreground max-w-sm px-4">
-                            {logsError === "cors" ? (
-                                <>
-                                    <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-1">
-                                        CORS error on /logs
-                                    </p>
-                                    <p className="text-xs">
-                                        Go to API Gateway → CORS, enable OPTIONS for /logs,
-                                        then redeploy.
-                                    </p>
-                                </>
-                            ) : logsError === "badrequest" ? (
-                                <>
-                                    <p className="text-sm font-semibold text-orange-600 dark:text-orange-400 mb-1">
-                                        /logs returned 400 Bad Request
-                                    </p>
-                                    <p className="text-xs">
-                                        The Lambda rejected the query. Check what parameters
-                                        your /logs Lambda expects.
-                                    </p>
-                                </>
-                            ) : logsError === "notfound" ? (
-                                <>
-                                    <p className="text-sm font-semibold mb-1">
-                                        Route not found (404)
-                                    </p>
-                                    <p className="text-xs">
-                                        /logs returned 404. Check your Lambda is deployed.
-                                    </p>
-                                </>
-                            ) : (
-                                <>
-                                    <p className="text-sm font-medium mb-1">
-                                        No data for this period
-                                    </p>
-                                    <p className="text-xs">
-                                        Response time history will appear here as checks run.
-                                    </p>
-                                </>
-                            )}
-                        </div>
-                    </div>
+                    <EmptyState
+                        message="No response time data yet"
+                        sub="Charts populate automatically as your monitors run. Check back in a few minutes."
+                    />
                 ) : (
-                    <ChartContainer
-                        config={chartConfig}
-                        className="aspect-auto h-[250px] w-full"
-                    >
-                        <AreaChart data={chartData}>
-                            <defs>
-                                <linearGradient
-                                    id="fillAvg"
-                                    x1="0"
-                                    y1="0"
-                                    x2="0"
-                                    y2="1"
-                                >
-                                    <stop
-                                        offset="5%"
-                                        stopColor="var(--color-avgResponseTime)"
-                                        stopOpacity={0.8}
+                    <>
+                        <ResponsiveContainer width="100%" height={250}>
+                            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="fillAvg" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor={CHART_COLOR} stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor={CHART_COLOR} stopOpacity={0.02} />
+                                    </linearGradient>
+                                </defs>
+
+                                <CartesianGrid
+                                    vertical={false}
+                                    strokeDasharray="3 3"
+                                    stroke="var(--border)"
+                                    opacity={0.5}
+                                />
+
+                                <XAxis
+                                    dataKey="date"
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickMargin={10}
+                                    minTickGap={timeRange === "7d" ? 80 : 40}
+                                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                                    tickFormatter={(v) => formatTick(v, timeRange)}
+                                />
+
+                                <YAxis
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickMargin={8}
+                                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                                    tickFormatter={(v) => `${v}ms`}
+                                    width={58}
+                                    domain={[0, yMax]}
+                                />
+
+                                <Tooltip
+                                    content={<CustomTooltip timeRange={timeRange} />}
+                                    cursor={{ stroke: "var(--border)", strokeWidth: 1, strokeDasharray: "4 4" }}
+                                />
+
+                                {/* Warning threshold line at 1000ms */}
+                                {yMax > 800 && (
+                                    <ReferenceLine
+                                        y={1000}
+                                        stroke="#f59e0b"
+                                        strokeDasharray="4 4"
+                                        strokeOpacity={0.5}
+                                        label={{ value: "1s threshold", position: "insideTopRight", fontSize: 10, fill: "#f59e0b" }}
                                     />
-                                    <stop
-                                        offset="95%"
-                                        stopColor="var(--color-avgResponseTime)"
-                                        stopOpacity={0.1}
-                                    />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid vertical={false} />
-                            <XAxis
-                                dataKey="date"
-                                tickLine={false}
-                                axisLine={false}
-                                tickMargin={8}
-                                minTickGap={timeRange === "7d" ? 60 : 32}
-                                tickFormatter={(value) => formatTick(value, timeRange)}
-                            />
-                            <YAxis
-                                tickLine={false}
-                                axisLine={false}
-                                tickMargin={8}
-                                tickFormatter={(v) => `${v}ms`}
-                                width={55}
-                                domain={[0, "auto"]}
-                            />
-                            <ChartTooltip
-                                cursor={false}
-                                content={
-                                    <ChartTooltipContent
-                                        labelFormatter={(value) =>
-                                            new Date(value).toLocaleString("en-US", {
-                                                weekday: "short",
-                                                month: "short",
-                                                day: "numeric",
-                                                hour:
-                                                    timeRange === "7d"
-                                                        ? "numeric"
-                                                        : undefined,
-                                                minute:
-                                                    timeRange === "7d"
-                                                        ? "2-digit"
-                                                        : undefined,
-                                            })
-                                        }
-                                        formatter={(value) => [
-                                            `${value}ms`,
-                                            "Avg Response",
-                                        ]}
-                                        indicator="dot"
-                                    />
-                                }
-                            />
-                            <Area
-                                dataKey="avgResponseTime"
-                                type="monotone"
-                                fill="url(#fillAvg)"
-                                stroke="var(--color-avgResponseTime)"
-                                strokeWidth={2}
-                                connectNulls
-                                dot={(props) => {
-                                    // Render a visible dot only on slots that have real data
-                                    if (props.payload?.checkCount > 0) {
+                                )}
+
+                                <Area
+                                    dataKey="avg"
+                                    type="monotoneX"
+                                    fill="url(#fillAvg)"
+                                    stroke={CHART_COLOR}
+                                    strokeWidth={2}
+                                    connectNulls={false}
+                                    dot={(props) => {
+                                        if (!props.payload?.count) return null
                                         return (
                                             <circle
                                                 key={props.key}
                                                 cx={props.cx}
                                                 cy={props.cy}
-                                                r={3}
-                                                fill="var(--color-avgResponseTime)"
+                                                r={3.5}
+                                                fill={CHART_COLOR}
                                                 stroke="white"
-                                                strokeWidth={1}
+                                                strokeWidth={1.5}
                                             />
                                         )
-                                    }
-                                    return null
-                                }}
-                                activeDot={{ r: 5 }}
-                            />
-                        </AreaChart>
-                    </ChartContainer>
+                                    }}
+                                    activeDot={{ r: 5, strokeWidth: 2, stroke: "white" }}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </>
                 )}
             </CardContent>
         </Card>

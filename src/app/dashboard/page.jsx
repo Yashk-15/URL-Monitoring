@@ -97,6 +97,31 @@ function DashboardContent() {
 
     const handleManualRefresh = () => fetchURLs(true)
 
+    /**
+     * Called by AddURLDialog after a successful POST.
+     * newPayload = the object that was just sent to the API.
+     * We add it to state immediately (optimistic) so the row appears
+     * without any spinner, then silently re-fetch after 2s to pull
+     * the real server record (which may have status/latency populated
+     * once the Lambda health-check fires).
+     */
+    const handleURLAdded = useCallback((newPayload) => {
+        if (newPayload) {
+            // Optimistic insert — normaliseURL handles field mapping
+            setData((prev) => [...prev, normaliseURL({ ...newPayload, status: 'Unknown' })])
+        }
+        // Silent background refresh — never sets loading=true so no spinner
+        setTimeout(async () => {
+            try {
+                const res = await apiClient.get('/urls')
+                if (!res.ok) return
+                const result = await res.json()
+                setData(extractArray(result).map(normaliseURL))
+                setLastUpdated(new Date())
+            } catch { /* ignore — user still sees optimistic row */ }
+        }, 2000)
+    }, [])
+
     // Initial fetch
     useEffect(() => {
         fetchURLs()
@@ -190,7 +215,7 @@ function DashboardContent() {
                                             <IconRefresh className={isRefreshing ? "animate-spin" : ""} />
                                             {isRefreshing ? "Refreshing..." : "Refresh"}
                                         </Button>
-                                        <AddURLDialog onURLAdded={fetchURLs} />
+                                        <AddURLDialog onURLAdded={handleURLAdded} />
                                     </div>
                                 </div>
 

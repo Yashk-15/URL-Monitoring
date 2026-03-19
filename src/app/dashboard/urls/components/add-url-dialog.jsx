@@ -108,14 +108,12 @@ export function AddURLDialog({ onURLAdded }) {
                 throw new Error(`Failed to add URL: ${response.status} ${body}`)
             }
 
-            // Close dialog, reset form, notify parent
+            // Close dialog, reset form, notify parent with new URL data
             handleOpenChange(false)
             toast.success(`"${formData.name}" added to monitoring`)
 
-            // Small delay to let DynamoDB propagate before refreshing
-            setTimeout(() => {
-                if (onURLAdded) onURLAdded()
-            }, 800)
+            // Pass payload up so parent can optimistically render it
+            if (onURLAdded) onURLAdded(payload)
         } catch (err) {
             console.error("Error adding URL:", err)
             setError(err.message || "Failed to add URL. Please try again.")
