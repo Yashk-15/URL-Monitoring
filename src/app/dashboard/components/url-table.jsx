@@ -50,6 +50,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
@@ -74,9 +82,10 @@ import {
     TableRow,
 } from "@/components/ui/table"
 
-// Drag handle
-function DragHandle({ id }) {
-    const { attributes, listeners } = useSortable({ id })
+// ─── Drag Handle ──────────────────────────────────────────────────────────────
+// Receives attributes & listeners from DraggableRow so only ONE useSortable
+// registration exists per row (the one in DraggableRow).
+function DragHandle({ attributes, listeners }) {
     return (
         <Button
             {...attributes}
@@ -129,7 +138,13 @@ function buildColumns(onRefresh) {
         {
             id: "drag",
             header: () => null,
-            cell: ({ row }) => <DragHandle id={row.original.id} />,
+            // attributes & listeners are now passed via data-drag-* props from DraggableRow
+            cell: ({ row }) => (
+                <DragHandle
+                    attributes={row.original.__dragAttributes}
+                    listeners={row.original.__dragListeners}
+                />
+            ),
         },
         {
             id: "select",
@@ -236,13 +251,52 @@ function buildColumns(onRefresh) {
     ]
 }
 
+// ─── Delete Confirmation Dialog ────────────────────────────────────────────────
+function DeleteConfirmDialog({ open, onOpenChange, urlName, onConfirm, isDeleting }) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[420px]">
+                <DialogHeader>
+                    <DialogTitle>Delete Monitor</DialogTitle>
+                    <DialogDescription>
+                        Are you sure you want to delete <span className="font-semibold text-foreground">&quot;{urlName}&quot;</span> from monitoring? This cannot be undone.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        disabled={isDeleting}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        onClick={onConfirm}
+                        disabled={isDeleting}
+                    >
+                        {isDeleting ? (
+                            <span className="flex items-center gap-2">
+                                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-destructive-foreground" />
+                                Deleting...
+                            </span>
+                        ) : "Delete"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 function RowActions({ row, onRefresh }) {
     const url = row.original
     const router = useRouter()
     const [isDeleting, setIsDeleting] = React.useState(false)
+    const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
 
     const handleViewDetails = () => {
-        router.push(`/dashboard/urls`)
+        // Navigate to the URLs list; a dedicated detail page can be added later
+        router.push(`/dashboard/urls?highlight=${encodeURIComponent(url.id)}`)
     }
 
     const handleOpenURL = () => {
@@ -255,7 +309,6 @@ function RowActions({ row, onRefresh }) {
     }
 
     const handleDelete = async () => {
-        if (!confirm(`Delete "${url.name}" from monitoring? This cannot be undone.`)) return
         setIsDeleting(true)
         try {
             const urlId = url.id || url.URLid
@@ -265,11 +318,10 @@ function RowActions({ row, onRefresh }) {
                 throw new Error(`Server returned ${res.status}: ${body}`)
             }
             toast.success(`"${url.name}" deleted from monitoring`)
+            setDeleteDialogOpen(false)
             if (onRefresh) onRefresh()
         } catch (err) {
             console.error('[delete]', err)
-            // "Failed to fetch" means a CORS or network error — the DELETE method
-            // likely isn't enabled in API Gateway for this route
             if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
                 toast.error(
                     'Delete failed: The API does not support DELETE requests yet. ' +
@@ -285,52 +337,68 @@ function RowActions({ row, onRefresh }) {
     }
 
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button
-                    variant="ghost"
-                    className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
-                    size="icon"
-                    disabled={isDeleting}
-                >
-                    <IconDotsVertical className="size-4" />
-                    <span className="sr-only">Open menu</span>
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onClick={handleViewDetails}>
-                    View Details
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleOpenURL}>
-                    Open URL
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleCopyURL}>
-                    Copy URL
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                    disabled
-                    className="text-muted-foreground cursor-not-allowed"
-                    title="Edit not yet available"
-                >
-                    Edit (coming soon)
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                >
-                    {isDeleting ? 'Deleting...' : 'Delete'}
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
+                        size="icon"
+                        disabled={isDeleting}
+                    >
+                        <IconDotsVertical className="size-4" />
+                        <span className="sr-only">Open menu</span>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={handleViewDetails}>
+                        View Details
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleOpenURL}>
+                        Open URL
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleCopyURL}>
+                        Copy URL
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                        disabled
+                        className="text-muted-foreground cursor-not-allowed"
+                        title="Edit not yet available"
+                    >
+                        Edit (coming soon)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        onClick={() => setDeleteDialogOpen(true)}
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                    >
+                        Delete
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DeleteConfirmDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+                urlName={url.name}
+                onConfirm={handleDelete}
+                isDeleting={isDeleting}
+            />
+        </>
     )
 }
 
+// ─── Draggable Row ─────────────────────────────────────────────────────────────
+// Single useSortable registration per row — passes attributes/listeners to
+// DragHandle via row.original so DragHandle itself never calls useSortable.
 function DraggableRow({ row }) {
-    const { transform, transition, setNodeRef, isDragging } = useSortable({
+    const { transform, transition, setNodeRef, isDragging, attributes, listeners } = useSortable({
         id: row.original.id,
     })
+
+    // Inject drag props into row data so the column cell can read them
+    row.original.__dragAttributes = attributes
+    row.original.__dragListeners = listeners
 
     return (
         <TableRow
@@ -434,7 +502,6 @@ export function DataTable({ data: initialData, onRefresh }) {
                             .getAllColumns()
                             .filter((col) => typeof col.accessorFn !== "undefined" && col.getCanHide())
                             .map((col) => {
-                                // Show human-readable label extracted from column header definition
                                 const headerDef = col.columnDef.header
                                 const label = typeof headerDef === "string"
                                     ? headerDef
@@ -577,4 +644,3 @@ export function DataTable({ data: initialData, onRefresh }) {
         </div>
     )
 }
-

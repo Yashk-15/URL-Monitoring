@@ -17,13 +17,14 @@ export function SectionCards({ data = [], loading = false }) {
     const failedChecks = data.filter(url => url?.status === "Down").length
     const warningChecks = data.filter(url => url?.status === "Warning").length
 
-    // Calculate average uptime
-    const avgUptime = data.length > 0
-        ? (data.reduce((sum, url) => {
+    // Calculate average uptime — keep as a number for comparisons, format for display
+    const avgUptimeNum = data.length > 0
+        ? data.reduce((sum, url) => {
             const uptime = url?.uptime ? parseFloat(url.uptime) : 0
             return sum + uptime
-        }, 0) / data.length).toFixed(1)
+        }, 0) / data.length
         : 0
+    const avgUptime = avgUptimeNum.toFixed(1) // string, only used for display
 
     // Calculate average response time with safe parsing
     const avgResponseTime = data.length > 0
@@ -56,7 +57,7 @@ export function SectionCards({ data = [], loading = false }) {
                         {activeMonitors === totalURLs ? "All endpoints active" : `${activeMonitors} active`} <IconWorld className="size-4" />
                     </div>
                     <div className="text-muted-foreground">
-                        {avgUptime >= 99 ? "Excellent uptime" : avgUptime >= 95 ? "Good uptime" : "Needs attention"}
+                        {avgUptimeNum >= 99 ? "Excellent uptime" : avgUptimeNum >= 95 ? "Good uptime" : "Needs attention"}
                     </div>
                 </CardFooter>
             </Card>

@@ -26,7 +26,8 @@ export const apiClient = {
             if (!token) {
                 console.warn('[api-client] No auth token found, redirecting to login')
                 if (typeof window !== 'undefined') {
-                    window.location.href = '/login'
+                    // Use replace() so login page doesn't pile up in history
+                    window.location.replace('/login')
                 }
                 throw new Error('No authentication token available')
             }
@@ -38,7 +39,10 @@ export const apiClient = {
             }
 
             const url = `${API_BASE}${endpoint}`
-            console.debug(`[api-client] ${options.method || 'GET'} ${url}`)
+            // Only log in development to avoid leaking endpoint details in production
+            if (process.env.NODE_ENV === 'development') {
+                console.debug(`[api-client] ${options.method || 'GET'} ${url}`)
+            }
 
             const response = await fetch(url, {
                 ...options,
@@ -49,7 +53,7 @@ export const apiClient = {
             if (response.status === 401 || response.status === 403) {
                 console.warn('[api-client] Auth error, redirecting to login')
                 if (typeof window !== 'undefined') {
-                    window.location.href = '/login'
+                    window.location.replace('/login')
                 }
                 throw new Error(`Authentication failed: ${response.status}`)
             }
@@ -95,7 +99,7 @@ export const apiClient = {
  *   - Wrapped:            { data: [...] }
  *   - Wrapped alternate:  { urls: [...] }
  *   - Wrapped alternate:  { logs: [...] }
- *   - Single object:      {...}  → wrapped in []
+ *   - Single object:      {...}  → wrapped in [] ONLY if it looks like a URL record
  */
 export function extractArray(result, keys = ['data', 'urls', 'logs', 'items']) {
     if (!result) return []
@@ -104,8 +108,11 @@ export function extractArray(result, keys = ['data', 'urls', 'logs', 'items']) {
         for (const key of keys) {
             if (Array.isArray(result[key])) return result[key]
         }
-        // Last resort: wrap single object
-        return [result]
+        // Only wrap a single object if it looks like a URL/log record,
+        // not an error response (which would have 'message' or 'error' keys)
+        if (!result.message && !result.error && !result.errorMessage) {
+            return [result]
+        }
     }
     return []
 }
@@ -152,7 +159,8 @@ export function normaliseLog(raw) {
         // Lambda stores response time as latencyMs in URL_Health_details table
         responseTime: parseInt(raw.latencyMs || raw.responseTime || raw.ResponseTime || raw.LatencyMs || 0),
         statusCode: raw.statusCode || raw.StatusCode || null,
-        status: raw.status || (raw.isUp ? 'Up' : 'Down') || 'Unknown',
+        // Fixed: 'Unknown' is now reachable when isUp is null/undefined
+        status: raw.status || (raw.isUp != null ? (raw.isUp ? 'Up' : 'Down') : 'Unknown'),
         errorMsg: raw.errorMsg || raw.error || null,
         isUp: raw.isUp ?? true,
         isSlow: raw.isSlow ?? false,

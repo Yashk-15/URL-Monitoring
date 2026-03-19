@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState, useCallback } from "react"
+import { Suspense, useMemo } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { AppSidebar } from "@/components/layout/sidebar/app-sidebar"
 import { ChartAreaInteractive } from "@/app/dashboard/components/charts/area-chart"
@@ -15,9 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { IconRefresh } from "@tabler/icons-react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
-import { apiClient, extractArray, normaliseURL } from "@/lib/api-client"
-import { useAutoRefresh } from "@/hooks/use-auto-refresh"
-import { toast } from "sonner"
+import { useURLData } from "@/hooks/use-url-data"
 
 // Tab value ↔ query-param mapping
 const VIEW_TO_TAB = {
@@ -37,11 +35,16 @@ function DashboardContent() {
     const pathname = usePathname()
     const searchParams = useSearchParams()
 
-    const [data, setData] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
-    const [lastUpdated, setLastUpdated] = useState(null)
-    const [isRefreshing, setIsRefreshing] = useState(false)
+    // Auto-refresh every 30s on the dedicated URLs page
+    const {
+        data,
+        loading,
+        error,
+        lastUpdated,
+        isRefreshing,
+        fetchURLs,
+        handleManualRefresh,
+    } = useURLData({ autoRefresh: true })
 
     // Derive active tab from URL — keeps URL and UI in sync bidirectionally
     const viewParam = searchParams.get("view") || "all"
@@ -59,60 +62,17 @@ function DashboardContent() {
         router.push(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false })
     }
 
-    const fetchURLs = useCallback(async (isManual = false) => {
-        try {
-            if (isManual) setIsRefreshing(true)
-            else setLoading(true)
-            setError(null)
+    // Pre-compute incident count once to avoid filtering data twice in render
+    const incidentCount = useMemo(
+        () => data.filter(d => d.status === "Down" || d.status === "Warning").length,
+        [data]
+    )
 
-            const response = await apiClient.get('/urls')
-
-            if (!response.ok) {
-                throw new Error(`API Error: ${response.status} ${response.statusText}`)
-            }
-
-            const result = await response.json()
-            const rawData = extractArray(result)
-            const transformedData = rawData.map(normaliseURL)
-
-            setData(transformedData)
-            setLastUpdated(new Date())
-
-            if (isManual) {
-                toast.success(`Refreshed ${transformedData.length} monitors`)
-            }
-        } catch (err) {
-            console.error("Error fetching URLs:", err)
-            setError(err.message)
-            setData([])
-            if (isManual) {
-                toast.error("Failed to refresh data")
-            }
-        } finally {
-            // Only reset the flag that was set at the start
-            if (isManual) setIsRefreshing(false)
-            else setLoading(false)
-        }
-    }, [])
-
-    const handleManualRefresh = () => fetchURLs(true)
-
-    // Initial fetch
-    useEffect(() => {
-        fetchURLs()
-    }, [fetchURLs])
-
-    // Auto-refresh every 30 seconds — always run as background (isManual=true)
-    // so the full loading spinner never re-appears after initial load
-    const silentRefresh = useCallback(() => fetchURLs(true), [fetchURLs])
-    useAutoRefresh(silentRefresh, 30000, true)
-
-    const filteredData = data.filter((item) => {
-        if (activeTab === "all") return true
-        if (activeTab === "active") return item.status === "Up"
-        if (activeTab === "down") return item.status === "Down" || item.status === "Warning"
-        return true
-    })
+    const filteredData = useMemo(() => {
+        if (activeTab === "active") return data.filter(item => item.status === "Up")
+        if (activeTab === "down") return data.filter(item => item.status === "Down" || item.status === "Warning")
+        return data
+    }, [data, activeTab])
 
     const renderTable = (tableData) => {
         if (loading) {
@@ -167,9 +127,9 @@ function DashboardContent() {
                                             className="data-[state=active]:text-red-600"
                                         >
                                             Incidents
-                                            {data.filter(d => d.status === "Down" || d.status === "Warning").length > 0 && (
+                                            {incidentCount > 0 && (
                                                 <span className="ml-1.5 inline-flex items-center justify-center size-5 rounded-full bg-red-500 text-white text-xs font-bold">
-                                                    {data.filter(d => d.status === "Down" || d.status === "Warning").length}
+                                                    {incidentCount}
                                                 </span>
                                             )}
                                         </TabsTrigger>

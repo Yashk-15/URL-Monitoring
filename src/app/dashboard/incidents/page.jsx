@@ -87,6 +87,7 @@ function IncidentsContent() {
     const [error, setError] = useState(null)
     const [severityFilter, setSeverityFilter] = useState("all")
     const [timeFilter, setTimeFilter] = useState("7d")
+    const [truncatedCount, setTruncatedCount] = useState(0)
 
     const fetchIncidents = useCallback(async () => {
         try {
@@ -115,7 +116,10 @@ function IncidentsContent() {
             }
 
             // Step 2: fetch logs per URL in parallel (Lambda requires ?urlId=X)
-            const urlsToQuery = urls.slice(0, 10) // cap to avoid hammering Lambda
+            // Cap at 10 to avoid hammering Lambda; warn the user if data is truncated
+            const CAP = 10
+            const urlsToQuery = urls.slice(0, CAP)
+            setTruncatedCount(Math.max(0, urls.length - CAP))
             const logResponses = await Promise.all(
                 urlsToQuery.map(async (u) => {
                     const urlId = u.URLid || u.id
@@ -136,7 +140,6 @@ function IncidentsContent() {
             )
 
             const rawLogs = logResponses.flat()
-            console.log('[Incidents] total log entries:', rawLogs.length)
 
             if (rawLogs.length === 0) {
                 setIncidents([])
@@ -300,6 +303,11 @@ function IncidentsContent() {
                                         Showing <span className="font-medium">{filteredIncidents.length}</span> of{" "}
                                         <span className="font-medium">{incidents.length}</span> incidents
                                     </div>
+                                    {truncatedCount > 0 && (
+                                        <div className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded px-2 py-1">
+                                            ⚠ Showing logs for first 10 of {truncatedCount + 10} URLs. {truncatedCount} URL{truncatedCount !== 1 ? 's' : ''} not shown.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

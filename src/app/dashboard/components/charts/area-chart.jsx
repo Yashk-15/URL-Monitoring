@@ -177,6 +177,10 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
     React.useEffect(() => {
         if (!urlIdString) return
 
+        // Cancel flag: if urlIdString changes before fetches complete,
+        // ignore the stale results to prevent a race condition.
+        let cancelled = false
+
         async function fetchLogsForURLs() {
             setLoadingLogs(true)
             setLogsError(null)
@@ -211,15 +215,16 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
                     })
                 )
 
+                if (cancelled) return
                 if (firstError) setLogsError(firstError)
                 setLogs(results.flat())
             } finally {
-                setLoadingLogs(false)
+                if (!cancelled) setLoadingLogs(false)
             }
         }
 
         fetchLogsForURLs()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        return () => { cancelled = true }
     }, [urlIdString])
 
     // Single cumulative chartData — all URLs bucketed together
