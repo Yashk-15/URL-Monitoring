@@ -22,7 +22,6 @@ export function useURLData({ autoRefresh = false } = {}) {
     const fetchURLs = useCallback(async (isManual = false) => {
         if (isManual) setIsRefreshing(true)
         else setLoading(true)
-
         try {
             setError(null)
             const response = await apiClient.get('/urls')
