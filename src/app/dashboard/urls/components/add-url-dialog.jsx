@@ -41,7 +41,6 @@ function generateURLid(name) {
 
 export function AddURLDialog({ onURLAdded }) {
     const [open, setOpen] = useState(false)
-    const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
     const [formData, setFormData] = useState(DEFAULT_FORM)
 
@@ -62,7 +61,7 @@ export function AddURLDialog({ onURLAdded }) {
         e.preventDefault()
         setError("")
 
-        // Client-side validation
+        // ── Client-side validation ─────────────────────────────────────────────
         if (!formData.name.trim()) {
             setError("Name is required")
             return
@@ -88,38 +87,42 @@ export function AddURLDialog({ onURLAdded }) {
             return
         }
 
-        setLoading(true)
+        const payload = {
+            URLid: generateURLid(formData.name),
+            name: formData.name.trim(),
+            url: formData.url.trim(),
+            enabled: true,
+            expectedStatus: parseInt(formData.expectedStatus) || 200,
+            maxLatencyMs: maxLatency,
+            timeoutSeconds: timeout,
+        }
 
+        // ── Optimistic update: close immediately and show the row now ──────────
+        // The parent's onURLAdded adds the row to the table instantly (with
+        // "Unknown" status) before the POST even completes. This makes the UX
+        // feel instant regardless of Lambda / network latency.
+        handleOpenChange(false)
+        if (onURLAdded) onURLAdded(payload)
+        toast.success(`"${payload.name}" added — monitoring will start shortly`)
+
+        // ── Background POST ────────────────────────────────────────────────────
+        // Fire-and-forget. The row is already visible so the user isn't blocked.
+        // The hook's background re-fetch (2s later) will replace the optimistic
+        // row with real server data.
         try {
-            const payload = {
-                URLid: generateURLid(formData.name),
-                name: formData.name.trim(),
-                url: formData.url.trim(),
-                enabled: true,
-                expectedStatus: parseInt(formData.expectedStatus) || 200,
-                maxLatencyMs: maxLatency,
-                timeoutSeconds: timeout,
-            }
-
             const response = await apiClient.post('/urls', payload)
-
             if (!response.ok) {
-                const body = await response.text()
-                throw new Error(`Failed to add URL: ${response.status} ${body}`)
+                const body = await response.text().catch(() => '')
+                throw new Error(`Server returned ${response.status}: ${body}`)
             }
-
-            // Close dialog, reset form, notify parent with new URL data
-            handleOpenChange(false)
-            toast.success(`"${formData.name}" added to monitoring`)
-
-            // Pass payload up so parent can optimistically render it
-            if (onURLAdded) onURLAdded(payload)
         } catch (err) {
             console.error("Error adding URL:", err)
-            setError(err.message || "Failed to add URL. Please try again.")
-            toast.error("Failed to add URL")
-        } finally {
-            setLoading(false)
+            // Show a toast so the user knows the save failed,
+            // but don't re-open the dialog to avoid disruption.
+            toast.error(
+                `Failed to save "${payload.name}" — it may not persist after refresh. ${err.message || ''}`,
+                { duration: 8000 }
+            )
         }
     }
 
@@ -155,7 +158,6 @@ export function AddURLDialog({ onURLAdded }) {
                                     value={formData.name}
                                     onChange={updateField("name")}
                                     required
-                                    disabled={loading}
                                     maxLength={80}
                                 />
                             </div>
@@ -169,7 +171,6 @@ export function AddURLDialog({ onURLAdded }) {
                                     value={formData.url}
                                     onChange={updateField("url")}
                                     required
-                                    disabled={loading}
                                 />
                                 <p className="text-xs text-muted-foreground">
                                     Must include https:// or http://
@@ -187,7 +188,6 @@ export function AddURLDialog({ onURLAdded }) {
                                         max="599"
                                         value={formData.expectedStatus}
                                         onChange={updateField("expectedStatus")}
-                                        disabled={loading}
                                     />
                                 </div>
                                 <div className="grid gap-2">
@@ -200,7 +200,6 @@ export function AddURLDialog({ onURLAdded }) {
                                         max="30"
                                         value={formData.timeoutSeconds}
                                         onChange={updateField("timeoutSeconds")}
-                                        disabled={loading}
                                     />
                                 </div>
                             </div>
@@ -215,7 +214,6 @@ export function AddURLDialog({ onURLAdded }) {
                                     max="30000"
                                     value={formData.maxLatencyMs}
                                     onChange={updateField("maxLatencyMs")}
-                                    disabled={loading}
                                 />
                                 <p className="text-xs text-muted-foreground">
                                     Mark as "Warning" if response time exceeds this value
@@ -228,19 +226,11 @@ export function AddURLDialog({ onURLAdded }) {
                                 type="button"
                                 variant="outline"
                                 onClick={() => handleOpenChange(false)}
-                                disabled={loading}
                             >
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={loading}>
-                                {loading ? (
-                                    <span className="flex items-center gap-2">
-                                        <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
-                                        Adding...
-                                    </span>
-                                ) : (
-                                    "Add URL"
-                                )}
+                            <Button type="submit">
+                                Add URL
                             </Button>
                         </DialogFooter>
                     </form>

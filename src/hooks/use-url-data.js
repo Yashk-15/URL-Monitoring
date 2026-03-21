@@ -55,28 +55,115 @@ export function useURLData({ autoRefresh = false } = {}) {
     }, [])
 
     /**
-     * Optimistic insert: immediately add the new URL to state and silently
-     * re-fetch in 2 seconds to pull the real server record (with health data).
+     * Optimistic insert + immediate ping:
+     *  1. Add row to state instantly with "Unknown" status
+     *  2. Fire a server-side ping (/api/ping) — usually responds in ~1s
+     *  3. Patch the row with real health metrics when ping returns
+     *  4. After 8s, do a smart-merge re-fetch to sync with DynamoDB
+     *
+     * Why 8s? Lambda cold-start can take 3–7s. We must wait until the
+     * background POST has completed before fetching, otherwise GET /urls
+     * returns the old list and wipes the optimistic row from state.
+     *
+     * Smart-merge rules:
+     *  - If a URL is in local state but NOT on the server yet → keep it (still saving)
+     *  - If a URL is on the server with "Unknown" health but we have real
+     *    data locally (from the ping) → preserve local health data
+     *  - Otherwise use the server record
      */
     const handleURLAdded = useCallback((newPayload) => {
-        if (newPayload) {
-            setData((prev) => [...prev, normaliseURL({ ...newPayload, status: 'Unknown' })])
-        }
+        if (!newPayload) return
 
-        // Cancel any previous pending background refresh
+        // Step 1 — optimistic insert
+        const optimisticRow = normaliseURL({ ...newPayload, status: 'Unknown' })
+        setData((prev) => [...prev, optimisticRow])
+
+        // Cancel any previous pending background timers
         if (bgTimerRef.current) clearTimeout(bgTimerRef.current)
 
+        // Step 2 — immediate ping via Next.js server-side route (bypasses CORS)
+        fetch('/api/ping', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: newPayload.url,
+                timeoutSeconds: newPayload.timeoutSeconds || 10,
+            }),
+        })
+            .then((r) => r.json())
+            .then((ping) => {
+                // Step 3 — patch the row with real metrics
+                const status = ping.isUp
+                    ? (ping.latencyMs > (newPayload.maxLatencyMs || 3000) ? 'Warning' : 'Up')
+                    : 'Down'
+
+                setData((prev) =>
+                    prev.map((row) =>
+                        row.id === optimisticRow.id
+                            ? {
+                                ...row,
+                                status,
+                                responseTime: String(ping.latencyMs ?? 0),
+                                statusCode: ping.statusCode,
+                                errorMsg: ping.errorMsg,
+                                isUp: ping.isUp,
+                                isSlow: status === 'Warning',
+                                lastCheck: new Date().toLocaleString(),
+                                uptime: ping.isUp ? '100' : '0',
+                            }
+                            : row
+                    )
+                )
+            })
+            .catch(() => {
+                // Ping failed — leave as Unknown; re-fetch below will sort it
+            })
+
+        // Step 4 — smart-merge re-fetch after 8s (gives time for the background POST +
+        // Lambda cold-start to complete before we ask the server for the list)
         bgTimerRef.current = setTimeout(async () => {
             try {
                 const res = await apiClient.get('/urls')
                 if (!res.ok) return
-                const result = await res.json()
-                setData(extractArray(result).map(normaliseURL))
+                const serverList = extractArray(await res.json()).map(normaliseURL)
+                const serverIds = new Set(serverList.map((u) => u.id))
+
+                setData((prev) => {
+                    // Items in local state that aren't on the server yet (POST still in-flight
+                    // or just completed but not yet returned) — keep them
+                    const localOnly = prev.filter((p) => !serverIds.has(p.id))
+
+                    // For server items: if the server still says "Unknown" but we have
+                    // better local data (from the ping), preserve our local health data
+                    const merged = serverList.map((serverItem) => {
+                        if (serverItem.status === 'Unknown') {
+                            const localItem = prev.find((p) => p.id === serverItem.id)
+                            if (localItem && localItem.status !== 'Unknown') {
+                                return {
+                                    ...serverItem,
+                                    status: localItem.status,
+                                    responseTime: localItem.responseTime,
+                                    statusCode: localItem.statusCode,
+                                    errorMsg: localItem.errorMsg,
+                                    isUp: localItem.isUp,
+                                    isSlow: localItem.isSlow,
+                                    lastCheck: localItem.lastCheck,
+                                    uptime: localItem.uptime,
+                                }
+                            }
+                        }
+                        return serverItem
+                    })
+
+                    return [...merged, ...localOnly]
+                })
+
                 setLastUpdated(new Date())
-            } catch { /* ignore — user still sees optimistic row */ }
+            } catch { /* ignore */ }
             bgTimerRef.current = null
-        }, 2000)
+        }, 8000)
     }, [])
+
 
     // Initial fetch
     useEffect(() => {

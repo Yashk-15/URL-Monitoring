@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { IconRefresh } from "@tabler/icons-react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { useURLData } from "@/hooks/use-url-data"
+import { AddURLDialog } from "@/app/dashboard/urls/components/add-url-dialog"
 
 // Tab value ↔ query-param mapping
 const VIEW_TO_TAB = {
@@ -43,6 +44,7 @@ function DashboardContent() {
         lastUpdated,
         isRefreshing,
         fetchURLs,
+        handleURLAdded,
         handleManualRefresh,
     } = useURLData({ autoRefresh: true })
 
@@ -73,6 +75,7 @@ function DashboardContent() {
         if (activeTab === "down") return data.filter(item => item.status === "Down" || item.status === "Warning")
         return data
     }, [data, activeTab])
+
 
     const renderTable = (tableData) => {
         if (loading) {
@@ -153,6 +156,7 @@ function DashboardContent() {
                                             <IconRefresh className={isRefreshing ? "animate-spin" : ""} />
                                             {isRefreshing ? "Refreshing..." : "Refresh"}
                                         </Button>
+                                        <AddURLDialog onURLAdded={handleURLAdded} />
                                     </div>
                                 </div>
 

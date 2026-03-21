@@ -11,6 +11,40 @@ if (!API_BASE) {
     )
 }
 
+// ─── Token Cache ───────────────────────────────────────────────────────────────
+// Cognito ID tokens are valid for 1 hour. Cache the token and only refresh it
+// when it's within 5 minutes of expiry, eliminating a network round-trip per
+// request.
+let _cachedToken = null
+let _tokenExpiresAt = 0 // Unix ms
+
+async function getAuthToken() {
+    const now = Date.now()
+    // Reuse cached token if still valid (5-min safety margin before expiry)
+    if (_cachedToken && now < _tokenExpiresAt - 5 * 60 * 1000) {
+        return _cachedToken
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        console.debug('[api-client] Refreshing Cognito token...')
+    }
+
+    const session = await fetchAuthSession()
+    const token = session.tokens?.idToken?.toString()
+
+    if (token) {
+        // Cognito ID tokens expire in 1 hour by default
+        _cachedToken = token
+        _tokenExpiresAt = now + 60 * 60 * 1000
+    } else {
+        // Clear cache so the next call retries
+        _cachedToken = null
+        _tokenExpiresAt = 0
+    }
+
+    return token
+}
+
 export const apiClient = {
     async request(endpoint, options = {}) {
         if (!API_BASE) {
@@ -18,9 +52,7 @@ export const apiClient = {
         }
 
         try {
-            // Get fresh Cognito token on every request
-            const session = await fetchAuthSession()
-            const token = session.tokens?.idToken?.toString()
+            const token = await getAuthToken()
 
             // If no token, session has expired — redirect to login
             if (!token) {
