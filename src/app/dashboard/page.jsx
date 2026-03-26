@@ -17,6 +17,8 @@ import { IconRefresh } from "@tabler/icons-react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { AddURLDialog } from "@/app/dashboard/urls/components/add-url-dialog"
 import { useURLData } from "@/hooks/use-url-data"
+import { AnalyticsTab } from "@/app/dashboard/components/analytics-tab"
+import { SettingsTab } from "@/app/dashboard/components/settings-tab"
 
 // Tab value ↔ query-param mapping
 const VIEW_TO_TAB = {
@@ -112,8 +114,10 @@ function DashboardContent() {
                     <div className="@container/main flex flex-1 flex-col gap-2">
                         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
 
-                            {/* Stats cards always reflect full dataset */}
-                            <SectionCards data={data} loading={loading} />
+                            {/* Stats cards only on monitor tabs */}
+                            {["all", "active", "down"].includes(activeTab) && (
+                                <SectionCards data={data} loading={loading} />
+                            )}
 
                             <Tabs
                                 value={activeTab}
@@ -141,21 +145,25 @@ function DashboardContent() {
                                     </TabsList>
 
                                     <div className="flex items-center gap-3">
-                                        {lastUpdated && (
+                                        {lastUpdated && ["all", "active", "down"].includes(activeTab) && (
                                             <span className="text-sm text-muted-foreground hidden sm:block">
                                                 Updated: {lastUpdated.toLocaleTimeString()}
                                             </span>
                                         )}
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleManualRefresh}
-                                            disabled={isRefreshing || loading}
-                                        >
-                                            <IconRefresh className={isRefreshing ? "animate-spin" : ""} />
-                                            {isRefreshing ? "Refreshing..." : "Refresh"}
-                                        </Button>
-                                        <AddURLDialog onURLAdded={handleURLAdded} />
+                                        {["all", "active", "down"].includes(activeTab) && (
+                                            <>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleManualRefresh}
+                                                    disabled={isRefreshing || loading}
+                                                >
+                                                    <IconRefresh className={isRefreshing ? "animate-spin" : ""} />
+                                                    {isRefreshing ? "Refreshing..." : "Refresh"}
+                                                </Button>
+                                                <AddURLDialog onURLAdded={handleURLAdded} />
+                                            </>
+                                        )}
                                     </div>
                                 </div>
 
@@ -175,17 +183,15 @@ function DashboardContent() {
                                 </TabsContent>
 
                                 <TabsContent value="analytics" className="space-y-4">
-                                    <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-                                        <p className="text-lg font-medium mb-2">Analytics Coming Soon</p>
-                                        <p className="text-sm">Historical trend analysis and detailed performance reports will appear here.</p>
-                                    </div>
+                                    <AnalyticsTab data={data} loading={loading} />
                                 </TabsContent>
 
                                 <TabsContent value="settings" className="space-y-4">
-                                    <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-                                        <p className="text-lg font-medium mb-2">Settings Coming Soon</p>
-                                        <p className="text-sm">Notification preferences, alert thresholds, and account settings will appear here.</p>
-                                    </div>
+                                    <SettingsTab
+                                        data={data}
+                                        loading={loading}
+                                        onRefresh={handleManualRefresh}
+                                    />
                                 </TabsContent>
 
                                 <TabsContent value="reports" className="space-y-4">
