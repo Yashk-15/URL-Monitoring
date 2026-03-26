@@ -49,8 +49,8 @@ export default function LoginPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
-                    <h1 className="text-3xl font-bold text-foreground">Welcome Back</h1>
-                    <p className="text-muted-foreground mt-2">Sign in to monitor your URLs</p>
+                    <h1 className="text-3xl font-bold text-foreground">URL Monitor</h1>
+                    <p className="text-muted-foreground mt-2">Sign in or create an account to get started</p>
                 </div>
 
                 {/* Login Form */}
