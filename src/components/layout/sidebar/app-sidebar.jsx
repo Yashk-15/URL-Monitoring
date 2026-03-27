@@ -8,6 +8,7 @@ import {
     IconListDetails,
     IconAlertTriangle,
     IconSettings,
+    IconWorld,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/layout/sidebar/nav-main"
@@ -41,6 +42,11 @@ const navItems = [
         icon: IconAlertTriangle,
     },
     {
+        title: "Global Monitor",
+        url: "/dashboard/global",
+        icon: IconWorld,
+    },
+    {
         title: "Analytics",
         url: "/dashboard?view=analytics",
         icon: IconChartBar,
@@ -62,10 +68,10 @@ export function AppSidebar({ ...props }) {
                     <SidebarMenuItem>
                         <SidebarMenuButton
                             asChild
-                            className="data-[slot=sidebar-menu-button]:!p-1.5"
+                            className="data-[slot=sidebar-menu-button]:p-1.5!"
                         >
                             <a href="/dashboard">
-                                <IconInnerShadowTop className="!size-5" />
+                                <IconInnerShadowTop className="size-5!" />
                                 <span className="text-base font-semibold">URL Monitor</span>
                             </a>
                         </SidebarMenuButton>

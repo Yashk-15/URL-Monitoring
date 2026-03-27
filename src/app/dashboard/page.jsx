@@ -19,7 +19,6 @@ import { AddURLDialog } from "@/app/dashboard/urls/components/add-url-dialog"
 import { useURLData } from "@/hooks/use-url-data"
 import { AnalyticsTab } from "@/app/dashboard/components/analytics-tab"
 import { SettingsTab } from "@/app/dashboard/components/settings-tab"
-import { GlobalMonitorTab } from "@/app/dashboard/components/global-monitor-tab"
 
 // Tab value ↔ query-param mapping
 const VIEW_TO_TAB = {
@@ -29,7 +28,6 @@ const VIEW_TO_TAB = {
     analytics: "analytics",
     settings: "settings",
     reports: "reports",
-    global: "global",
 }
 const TAB_TO_VIEW = Object.fromEntries(
     Object.entries(VIEW_TO_TAB).map(([v, t]) => [t, v])
@@ -145,7 +143,6 @@ function DashboardContent() {
                                             <TabsTrigger value="analytics">Analytics</TabsTrigger>
                                             <TabsTrigger value="settings">Settings</TabsTrigger>
                                             <TabsTrigger value="reports">Reports</TabsTrigger>
-                                            <TabsTrigger value="global">🌐 Global</TabsTrigger>
                                         </TabsList>
                                     </div>
 
@@ -204,10 +201,6 @@ function DashboardContent() {
                                         <p className="text-lg font-medium mb-2">Reports Coming Soon</p>
                                         <p className="text-sm">Downloadable uptime reports and SLA summaries will appear here.</p>
                                     </div>
-                                </TabsContent>
-
-                                <TabsContent value="global" className="space-y-4">
-                                    <GlobalMonitorTab />
                                 </TabsContent>
                             </Tabs>
                         </div>
