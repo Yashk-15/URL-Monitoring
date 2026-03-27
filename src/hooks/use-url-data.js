@@ -38,7 +38,12 @@ export function useURLData({ autoRefresh = false } = {}) {
             setLastUpdated(new Date())
 
             if (isManual) {
-                toast.success(`Refreshed ${transformedData.length} monitors`)
+                const activeCount = transformedData.filter(u => u.enabled !== false).length
+                const pausedCount = transformedData.length - activeCount
+                const msg = pausedCount > 0
+                    ? `Refreshed ${activeCount} active monitor${activeCount !== 1 ? 's' : ''} (${pausedCount} paused)`
+                    : `Refreshed ${activeCount} monitor${activeCount !== 1 ? 's' : ''}`
+                toast.success(msg, { id: 'refresh-toast' })
             }
         } catch (err) {
             console.error('Error fetching URLs:', err)
@@ -170,10 +175,10 @@ export function useURLData({ autoRefresh = false } = {}) {
         fetchURLs()
     }, [fetchURLs])
 
-    // Optional auto-refresh every 30 seconds
+    // Optional auto-refresh every 30 seconds — silent (no toast)
     useEffect(() => {
         if (!autoRefresh) return
-        const interval = setInterval(() => fetchURLs(true), 30000)
+        const interval = setInterval(() => fetchURLs(false), 30000)
         return () => clearInterval(interval)
     }, [autoRefresh, fetchURLs])
 
