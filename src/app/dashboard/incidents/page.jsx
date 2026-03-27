@@ -22,11 +22,7 @@ import { Button } from "@/components/ui/button"
 import { apiClient, extractArray, normaliseLog, normaliseURL } from "@/lib/api-client"
 
 /**
- * Build incident records from:
- *   1. /logs  → URL_Health_details (URLid PK + Timestamp SK) — historical failures
- *   2. /urls  → URL_Monitoring + URL_State — current state for names/URLs
- *
- * An "incident" = any log entry where isUp===false or status==="Down".
+ * Build incident records from log history (historical failures).
  */
 function deriveIncidents(logs, urlMap) {
     const failures = logs.filter((log) => {
@@ -60,15 +56,42 @@ function deriveIncidents(logs, urlMap) {
                     ? `Response time exceeded threshold (${log.responseTime}ms)`
                     : `Service returned ${statusText}`,
             severity,
-            status: "active",    // Historical logs are all treated as past active incidents
+            status: "active",
             timestamp: log.timestamp,
             affectedUrls: urlHref ? [urlHref] : [],
             errorMessage: log.errorMsg || null,
             statusCode: log.statusCode || null,
             responseTime: log.responseTime || null,
             urlName,
+            isLive: false,
         }
-    }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))  // newest first
+    }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+}
+
+/**
+ * Derive live incidents from current URL states — same logic as the Incidents tab.
+ */
+function deriveLiveIncidents(urls) {
+    return urls
+        .filter(u => u.status === "Down" || u.status === "Warning")
+        .map(u => ({
+            id: `live-${u.id}`,
+            title: `${u.name} — ${u.status === "Down" ? "Unreachable" : "Slow / Warning"}`,
+            description: u.errorMsg
+                ? u.errorMsg
+                : u.status === "Down"
+                    ? "Current health check reports this endpoint as down."
+                    : `Response time is ${u.responseTime}ms — above threshold.`,
+            severity: u.status === "Down" ? "critical" : "warning",
+            status: "active",
+            timestamp: u.lastCheck || new Date().toISOString(),
+            affectedUrls: u.url ? [u.url] : [],
+            errorMessage: u.errorMsg || null,
+            statusCode: u.statusCode || null,
+            responseTime: u.responseTime || null,
+            urlName: u.name,
+            isLive: true,
+        }))
 }
 
 function StatCard({ value, label, color = "" }) {
@@ -80,8 +103,31 @@ function StatCard({ value, label, color = "" }) {
     )
 }
 
+function LiveIncidentRow({ incident }) {
+    const isCritical = incident.severity === "critical"
+    return (
+        <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${
+            isCritical
+                ? "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/10"
+                : "border-yellow-200 bg-yellow-50 dark:border-yellow-900/40 dark:bg-yellow-900/10"
+        }`}>
+            <div className={`mt-0.5 size-2 rounded-full shrink-0 ${isCritical ? "bg-red-500" : "bg-yellow-500"} animate-pulse`} />
+            <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold ${isCritical ? "text-red-700 dark:text-red-400" : "text-yellow-700 dark:text-yellow-400"}`}>
+                    {incident.title}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">{incident.description}</p>
+            </div>
+            {incident.responseTime && (
+                <span className="text-xs font-mono text-muted-foreground shrink-0">{incident.responseTime}ms</span>
+            )}
+        </div>
+    )
+}
+
 function IncidentsContent() {
     const [incidents, setIncidents] = useState([])
+    const [liveIncidents, setLiveIncidents] = useState([])
     const [filteredIncidents, setFilteredIncidents] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -94,20 +140,19 @@ function IncidentsContent() {
             setLoading(true)
             setError(null)
 
-            // Step 1: get all URLs for this user
             const urlsRes = await apiClient.get('/urls')
-            if (!urlsRes.ok) {
-                throw new Error(`Failed to load URLs: HTTP ${urlsRes.status}`)
-            }
-            const urlsResult = await urlsRes.json()
-            const urls = extractArray(urlsResult)
+            if (!urlsRes.ok) throw new Error(`Failed to load URLs: HTTP ${urlsRes.status}`)
+            const rawUrls = extractArray(await urlsRes.json())
+            const urls = rawUrls.map(normaliseURL)
 
-            // Build a name/href map keyed by URLid
             const urlMap = {}
-            for (const u of urls) {
+            for (const u of rawUrls) {
                 const key = u.URLid || u.id
                 if (key) urlMap[key] = { name: u.name, url: u.url }
             }
+
+            // Live state — same filter as the Incidents tab
+            setLiveIncidents(deriveLiveIncidents(urls))
 
             if (urls.length === 0) {
                 setIncidents([])
@@ -115,32 +160,23 @@ function IncidentsContent() {
                 return
             }
 
-            // Step 2: fetch logs per URL in parallel (Lambda requires ?urlId=X)
-            // Cap at 10 to avoid hammering Lambda; warn the user if data is truncated
             const CAP = 10
-            const urlsToQuery = urls.slice(0, CAP)
-            setTruncatedCount(Math.max(0, urls.length - CAP))
+            const urlsToQuery = rawUrls.slice(0, CAP)
+            setTruncatedCount(Math.max(0, rawUrls.length - CAP))
+
             const logResponses = await Promise.all(
                 urlsToQuery.map(async (u) => {
                     const urlId = u.URLid || u.id
                     if (!urlId) return []
                     try {
                         const res = await apiClient.get(`/logs?urlId=${encodeURIComponent(urlId)}`)
-                        if (!res.ok) {
-                            console.warn(`[Incidents] /logs?urlId=${urlId} → ${res.status}`)
-                            return []
-                        }
-                        const raw = await res.json()
-                        return extractArray(raw).map(normaliseLog)
-                    } catch (err) {
-                        console.error(`[Incidents] error fetching logs for ${urlId}:`, err)
-                        return []
-                    }
+                        if (!res.ok) return []
+                        return extractArray(await res.json()).map(l => ({ ...normaliseLog(l), urlId }))
+                    } catch { return [] }
                 })
             )
 
             const rawLogs = logResponses.flat()
-
             if (rawLogs.length === 0) {
                 setIncidents([])
                 setFilteredIncidents([])
@@ -160,49 +196,29 @@ function IncidentsContent() {
         }
     }, [])
 
-    useEffect(() => {
-        fetchIncidents()
-    }, [fetchIncidents])
+    useEffect(() => { fetchIncidents() }, [fetchIncidents])
 
-    // Apply filters
     useEffect(() => {
         let filtered = incidents
-
-        if (severityFilter !== "all") {
-            filtered = filtered.filter((i) => i.severity === severityFilter)
-        }
-
+        if (severityFilter !== "all") filtered = filtered.filter(i => i.severity === severityFilter)
         if (timeFilter !== "all") {
             const days = timeFilter === "24h" ? 1 : timeFilter === "7d" ? 7 : 30
             const cutoff = new Date()
             cutoff.setDate(cutoff.getDate() - days)
-            filtered = filtered.filter((i) => new Date(i.timestamp) >= cutoff)
+            filtered = filtered.filter(i => new Date(i.timestamp) >= cutoff)
         }
-
         setFilteredIncidents(filtered)
     }, [severityFilter, timeFilter, incidents])
 
-    // Stats
-    const criticalCount = incidents.filter((i) => i.severity === "critical").length
-    const warningCount = incidents.filter((i) => i.severity === "warning").length
-    const last24h = incidents.filter((i) => {
-        const cutoff = new Date()
-        cutoff.setDate(cutoff.getDate() - 1)
-        return new Date(i.timestamp) >= cutoff
-    }).length
-    const last7d = incidents.filter((i) => {
-        const cutoff = new Date()
-        cutoff.setDate(cutoff.getDate() - 7)
-        return new Date(i.timestamp) >= cutoff
-    }).length
+    const allForStats = [...liveIncidents, ...incidents]
+    const criticalCount = allForStats.filter(i => i.severity === "critical").length
+    const warningCount  = allForStats.filter(i => i.severity === "warning").length
+    const mkCutoff = (days) => { const d = new Date(); d.setDate(d.getDate() - days); return d }
+    const last24h = incidents.filter(i => new Date(i.timestamp) >= mkCutoff(1)).length
+    const last7d  = incidents.filter(i => new Date(i.timestamp) >= mkCutoff(7)).length
 
     return (
-        <SidebarProvider
-            style={{
-                "--sidebar-width": "calc(var(--spacing) * 72)",
-                "--header-height": "calc(var(--spacing) * 12)",
-            }}
-        >
+        <SidebarProvider style={{ "--sidebar-width": "calc(var(--spacing) * 72)", "--header-height": "calc(var(--spacing) * 12)" }}>
             <AppSidebar variant="inset" />
             <SidebarInset>
                 <SiteHeader />
@@ -210,7 +226,7 @@ function IncidentsContent() {
                     <div className="@container/main flex flex-1 flex-col gap-2">
                         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
 
-                            {/* Page Header */}
+                            {/* Header */}
                             <div className="px-4 lg:px-6">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
@@ -218,20 +234,11 @@ function IncidentsContent() {
                                             <IconAlertTriangle className="size-5 text-red-600 dark:text-red-400" />
                                         </div>
                                         <div>
-                                            <h1 className="text-2xl font-bold tracking-tight">
-                                                Alerts & Incidents
-                                            </h1>
-                                            <p className="text-muted-foreground text-sm">
-                                                Failed checks from URL health monitoring logs
-                                            </p>
+                                            <h1 className="text-2xl font-bold tracking-tight">Alerts &amp; Incidents</h1>
+                                            <p className="text-muted-foreground text-sm">Live status + failed checks from health monitoring logs</p>
                                         </div>
                                     </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={fetchIncidents}
-                                        disabled={loading}
-                                    >
+                                    <Button variant="outline" size="sm" onClick={fetchIncidents} disabled={loading}>
                                         {loading ? "Loading..." : "Refresh"}
                                     </Button>
                                 </div>
@@ -240,39 +247,47 @@ function IncidentsContent() {
                             {/* Stats */}
                             <div className="px-4 lg:px-6">
                                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                                    <StatCard
-                                        value={loading ? "..." : criticalCount}
-                                        label="Critical Failures"
-                                        color="text-red-600"
-                                    />
-                                    <StatCard
-                                        value={loading ? "..." : warningCount}
-                                        label="Warnings"
-                                        color="text-yellow-600"
-                                    />
-                                    <StatCard
-                                        value={loading ? "..." : last24h}
-                                        label="Last 24 hours"
-                                    />
-                                    <StatCard
-                                        value={loading ? "..." : last7d}
-                                        label="Last 7 days"
-                                    />
+                                    <StatCard value={loading ? "..." : criticalCount} label="Critical Failures" color="text-red-600" />
+                                    <StatCard value={loading ? "..." : warningCount}  label="Warnings"          color="text-yellow-600" />
+                                    <StatCard value={loading ? "..." : last24h}       label="Last 24 hours" />
+                                    <StatCard value={loading ? "..." : last7d}        label="Last 7 days" />
                                 </div>
                             </div>
+
+                            {/* Live incidents — synced with Incidents tab */}
+                            {!loading && liveIncidents.length > 0 && (
+                                <div className="px-4 lg:px-6 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-semibold">Currently Down / Warning</span>
+                                        <span className="inline-flex items-center justify-center h-5 min-w-5 rounded-full bg-red-500 text-white text-xs font-bold px-1">
+                                            {liveIncidents.length}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">— matches the Incidents tab</span>
+                                    </div>
+                                    {liveIncidents.map(inc => <LiveIncidentRow key={inc.id} incident={inc} />)}
+                                </div>
+                            )}
+
+                            {!loading && liveIncidents.length === 0 && !error && (
+                                <div className="px-4 lg:px-6">
+                                    <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 dark:border-green-900/40 dark:bg-green-900/10 px-4 py-2.5">
+                                        <span className="size-2 rounded-full bg-green-500 shrink-0" />
+                                        <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                                            All monitors currently operational — matches the Incidents tab
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Filters */}
                             <div className="px-4 lg:px-6">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-4 flex-wrap">
+                                        <span className="text-sm font-semibold text-muted-foreground">Historical Log Incidents</span>
                                         <div className="flex items-center gap-2">
-                                            <Label htmlFor="severity-filter" className="text-sm whitespace-nowrap">
-                                                Severity:
-                                            </Label>
+                                            <Label htmlFor="severity-filter" className="text-sm whitespace-nowrap">Severity:</Label>
                                             <Select value={severityFilter} onValueChange={setSeverityFilter}>
-                                                <SelectTrigger id="severity-filter" className="w-32">
-                                                    <SelectValue placeholder="All" />
-                                                </SelectTrigger>
+                                                <SelectTrigger id="severity-filter" className="w-32"><SelectValue placeholder="All" /></SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="all">All</SelectItem>
                                                     <SelectItem value="critical">Critical</SelectItem>
@@ -280,15 +295,10 @@ function IncidentsContent() {
                                                 </SelectContent>
                                             </Select>
                                         </div>
-
                                         <div className="flex items-center gap-2">
-                                            <Label htmlFor="time-filter" className="text-sm whitespace-nowrap">
-                                                Period:
-                                            </Label>
+                                            <Label htmlFor="time-filter" className="text-sm whitespace-nowrap">Period:</Label>
                                             <Select value={timeFilter} onValueChange={setTimeFilter}>
-                                                <SelectTrigger id="time-filter" className="w-36">
-                                                    <SelectValue placeholder="Last 7 days" />
-                                                </SelectTrigger>
+                                                <SelectTrigger id="time-filter" className="w-36"><SelectValue placeholder="Last 7 days" /></SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="24h">Last 24 hours</SelectItem>
                                                     <SelectItem value="7d">Last 7 days</SelectItem>
@@ -298,10 +308,9 @@ function IncidentsContent() {
                                             </Select>
                                         </div>
                                     </div>
-
                                     <div className="text-sm text-muted-foreground">
                                         Showing <span className="font-medium">{filteredIncidents.length}</span> of{" "}
-                                        <span className="font-medium">{incidents.length}</span> incidents
+                                        <span className="font-medium">{incidents.length}</span> log incidents
                                     </div>
                                     {truncatedCount > 0 && (
                                         <div className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded px-2 py-1">
@@ -316,7 +325,7 @@ function IncidentsContent() {
                                 {loading ? (
                                     <div className="text-center py-12">
                                         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-                                        <p className="text-muted-foreground mt-4">Loading incidents from logs...</p>
+                                        <p className="text-muted-foreground mt-4">Loading incidents...</p>
                                     </div>
                                 ) : error ? (
                                     <div className="text-center py-12">
@@ -339,11 +348,7 @@ function IncidentsContent() {
 export default function Page() {
     return (
         <ProtectedRoute>
-            <Suspense fallback={
-                <div className="flex items-center justify-center min-h-screen">
-                    Loading...
-                </div>
-            }>
+            <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
                 <IncidentsContent />
             </Suspense>
         </ProtectedRoute>
