@@ -35,6 +35,7 @@ import { toast } from "sonner"
 const LS_KEY_THRESHOLD = "urlmonitor_latency_threshold"
 const LS_KEY_INTERVAL  = "urlmonitor_check_interval"
 
+
 // ─── Toggle switch ────────────────────────────────────────────────────────────
 function Toggle({ checked, onChange, disabled }) {
     return (
@@ -157,21 +158,31 @@ export function SettingsTab({ data = [], loading = false, onRefresh }) {
     }
 
     const toggleMonitor = useCallback(async (url, enabled) => {
+        const toastId = `toggle-${url.id}`   // stable ID — replaces instead of stacking
         setTogglingId(url.id)
-        // Optimistic update
-        setEnabledMap(prev => ({ ...prev, [url.id]: enabled }))
+        setEnabledMap(prev => ({ ...prev, [url.id]: enabled }))   // optimistic
         try {
-            const res = await apiClient.put(`/urls/${url.id}`, {
-                ...url,
+            const payload = {
+                URLid: url.id,
+                name: url.name,
+                url: url.url,
                 enabled,
-            })
-            if (!res.ok) throw new Error(`HTTP ${res.status}`)
-            toast.success(`${url.name} ${enabled ? "enabled" : "disabled"}`)
-            onRefresh?.()
-        } catch {
-            // Revert
-            setEnabledMap(prev => ({ ...prev, [url.id]: !enabled }))
-            toast.error(`Failed to update ${url.name}`)
+                expectedStatus: url.expectedStatus || 200,
+                maxLatencyMs: url.maxLatencyMs || 3000,
+                timeoutSeconds: url.timeoutSeconds || 5,
+            }
+            const res = await apiClient.put(`/urls/${url.id}`, payload)
+            if (!res.ok) {
+                const body = await res.text().catch(() => "")
+                throw new Error(`HTTP ${res.status}: ${body}`)
+            }
+            toast.success(`${url.name} monitoring ${enabled ? "enabled" : "disabled"}`, { id: toastId })
+            // Refresh the monitor tab after a short delay so the url-table
+            // and stats-cards pick up the updated enabled field from the server
+            setTimeout(() => onRefresh?.(), 600)
+        } catch (err) {
+            setEnabledMap(prev => ({ ...prev, [url.id]: !enabled }))   // revert
+            toast.error(`Failed: ${err.message || "unknown error"}`, { id: toastId })
         } finally {
             setTogglingId(null)
         }
@@ -300,17 +311,36 @@ export function SettingsTab({ data = [], loading = false, onRefresh }) {
                             const isEnabled = enabledMap[url.id] ?? true
                             const isToggling = togglingId === url.id
                             return (
-                                <div key={url.id} className="flex items-center gap-3 py-3">
+                                <div
+                                    key={url.id}
+                                    className={`flex items-center gap-3 py-3 transition-opacity ${!isEnabled ? "opacity-50" : ""}`}
+                                >
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">{url.name}</p>
+                                        <p className={`text-sm font-medium truncate ${!isEnabled ? "line-through text-muted-foreground" : ""}`}>
+                                            {url.name}
+                                        </p>
                                         <p className="text-xs text-muted-foreground truncate">{url.url}</p>
                                     </div>
-                                    <StatusBadge status={url.status} />
-                                    <Toggle
-                                        checked={isEnabled}
-                                        onChange={(val) => toggleMonitor(url, val)}
-                                        disabled={isToggling}
-                                    />
+
+                                    {/* Show "Paused" badge when disabled, status badge when enabled */}
+                                    {isEnabled
+                                        ? <StatusBadge status={url.status} />
+                                        : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                                            Paused
+                                          </span>
+                                    }
+
+                                    {isToggling ? (
+                                        <span className="text-xs text-muted-foreground animate-pulse w-11 text-center shrink-0">
+                                            Saving…
+                                        </span>
+                                    ) : (
+                                        <Toggle
+                                            checked={isEnabled}
+                                            onChange={(val) => toggleMonitor(url, val)}
+                                            disabled={isToggling}
+                                        />
+                                    )}
                                 </div>
                             )
                         })}

@@ -175,9 +175,14 @@ function buildColumns(onRefresh) {
         {
             accessorKey: "name",
             header: "Name",
-            cell: ({ row }) => (
-                <div className="font-medium">{row.original.name}</div>
-            ),
+            cell: ({ row }) => {
+                const disabled = row.original.enabled === false
+                return (
+                    <div className={`font-medium ${disabled ? "line-through text-muted-foreground" : ""}`}>
+                        {row.original.name}
+                    </div>
+                )
+            },
             enableHiding: false,
         },
         {
@@ -199,7 +204,16 @@ function buildColumns(onRefresh) {
         {
             accessorKey: "status",
             header: "Status",
-            cell: ({ row }) => <StatusBadge status={row.original.status} />,
+            cell: ({ row }) => {
+                if (row.original.enabled === false) {
+                    return (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            Paused
+                        </span>
+                    )
+                }
+                return <StatusBadge status={row.original.status} />
+            },
         },
         {
             accessorKey: "responseTime",
@@ -400,12 +414,14 @@ function DraggableRow({ row }) {
     row.original.__dragAttributes = attributes
     row.original.__dragListeners = listeners
 
+    const isPaused = row.original.enabled === false
+
     return (
         <TableRow
             data-state={row.getIsSelected() && "selected"}
             data-dragging={isDragging ? "true" : "false"}
             ref={setNodeRef}
-            className="relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80"
+            className={`relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80 transition-opacity ${isPaused ? "opacity-50" : ""}`}
             style={{
                 transform: CSS.Transform.toString(transform),
                 transition,

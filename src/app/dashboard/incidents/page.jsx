@@ -106,11 +106,10 @@ function StatCard({ value, label, color = "" }) {
 function LiveIncidentRow({ incident }) {
     const isCritical = incident.severity === "critical"
     return (
-        <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${
-            isCritical
+        <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${isCritical
                 ? "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/10"
                 : "border-yellow-200 bg-yellow-50 dark:border-yellow-900/40 dark:bg-yellow-900/10"
-        }`}>
+            }`}>
             <div className={`mt-0.5 size-2 rounded-full shrink-0 ${isCritical ? "bg-red-500" : "bg-yellow-500"} animate-pulse`} />
             <div className="flex-1 min-w-0">
                 <p className={`text-sm font-semibold ${isCritical ? "text-red-700 dark:text-red-400" : "text-yellow-700 dark:text-yellow-400"}`}>
@@ -212,10 +211,10 @@ function IncidentsContent() {
 
     const allForStats = [...liveIncidents, ...incidents]
     const criticalCount = allForStats.filter(i => i.severity === "critical").length
-    const warningCount  = allForStats.filter(i => i.severity === "warning").length
+    const warningCount = allForStats.filter(i => i.severity === "warning").length
     const mkCutoff = (days) => { const d = new Date(); d.setDate(d.getDate() - days); return d }
     const last24h = incidents.filter(i => new Date(i.timestamp) >= mkCutoff(1)).length
-    const last7d  = incidents.filter(i => new Date(i.timestamp) >= mkCutoff(7)).length
+    const last7d = incidents.filter(i => new Date(i.timestamp) >= mkCutoff(7)).length
 
     return (
         <SidebarProvider style={{ "--sidebar-width": "calc(var(--spacing) * 72)", "--header-height": "calc(var(--spacing) * 12)" }}>
@@ -248,9 +247,9 @@ function IncidentsContent() {
                             <div className="px-4 lg:px-6">
                                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                                     <StatCard value={loading ? "..." : criticalCount} label="Critical Failures" color="text-red-600" />
-                                    <StatCard value={loading ? "..." : warningCount}  label="Warnings"          color="text-yellow-600" />
-                                    <StatCard value={loading ? "..." : last24h}       label="Last 24 hours" />
-                                    <StatCard value={loading ? "..." : last7d}        label="Last 7 days" />
+                                    <StatCard value={loading ? "..." : warningCount} label="Warnings" color="text-yellow-600" />
+                                    <StatCard value={loading ? "..." : last24h} label="Last 24 hours" />
+                                    <StatCard value={loading ? "..." : last7d} label="Last 7 days" />
                                 </div>
                             </div>
 
@@ -265,17 +264,6 @@ function IncidentsContent() {
                                         <span className="text-xs text-muted-foreground">— matches the Incidents tab</span>
                                     </div>
                                     {liveIncidents.map(inc => <LiveIncidentRow key={inc.id} incident={inc} />)}
-                                </div>
-                            )}
-
-                            {!loading && liveIncidents.length === 0 && !error && (
-                                <div className="px-4 lg:px-6">
-                                    <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 dark:border-green-900/40 dark:bg-green-900/10 px-4 py-2.5">
-                                        <span className="size-2 rounded-full bg-green-500 shrink-0" />
-                                        <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                                            All monitors currently operational — matches the Incidents tab
-                                        </span>
-                                    </div>
                                 </div>
                             )}
 
