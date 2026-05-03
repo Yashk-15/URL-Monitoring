@@ -1,0 +1,229 @@
+"use client"
+
+import { Suspense, useMemo } from "react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { AppSidebar } from "@/components/layout/sidebar/app-sidebar"
+import { ChartAreaInteractive } from "@/app/dashboard/components/charts/area-chart"
+import { DataTable } from "@/app/dashboard/components/url-table"
+import { SectionCards } from "@/app/dashboard/components/stats-cards"
+import { SiteHeader } from "@/components/layout/site-header"
+import {
+    SidebarInset,
+    SidebarProvider,
+} from "@/components/ui/sidebar"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { IconRefresh } from "@tabler/icons-react"
+import { ProtectedRoute } from "@/components/auth/protected-route"
+import { AddURLDialog } from "@/app/dashboard/urls/components/add-url-dialog"
+import { useURLData } from "@/hooks/use-url-data"
+import { AnalyticsTab } from "@/app/dashboard/components/analytics-tab"
+import { SettingsTab } from "@/app/dashboard/components/settings-tab"
+
+// Tab value ↔ query-param mapping
+const VIEW_TO_TAB = {
+    all: "all",
+    active: "active",
+    incidents: "down",
+    analytics: "analytics",
+    settings: "settings",
+    reports: "reports",
+}
+const TAB_TO_VIEW = Object.fromEntries(
+    Object.entries(VIEW_TO_TAB).map(([v, t]) => [t, v])
+)
+
+function DashboardContent() {
+    const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+
+    // Auto-refresh disabled on the overview dashboard — manual refresh only
+    const {
+        data,
+        loading,
+        error,
+        lastUpdated,
+        isRefreshing,
+        fetchURLs,
+        handleURLAdded,
+        handleManualRefresh,
+    } = useURLData({ autoRefresh: false })
+
+    // Derive active tab from URL — keeps URL and UI in sync bidirectionally
+    const viewParam = searchParams.get("view") || "all"
+    const activeTab = VIEW_TO_TAB[viewParam] || "all"
+
+    const handleTabChange = (tab) => {
+        const view = TAB_TO_VIEW[tab] || "all"
+        const params = new URLSearchParams(searchParams.toString())
+        if (view === "all") {
+            params.delete("view")
+        } else {
+            params.set("view", view)
+        }
+        const qs = params.toString()
+        router.push(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false })
+    }
+
+    // Pre-compute incident count once to avoid filtering data twice in render
+    const incidentCount = useMemo(
+        () => data.filter(d => d.status === "Down" || d.status === "Warning").length,
+        [data]
+    )
+
+    const filteredData = useMemo(() => {
+        if (activeTab === "active") return data.filter(item => item.status === "Up")
+        if (activeTab === "down") return data.filter(item => item.status === "Down" || item.status === "Warning")
+        return data
+    }, [data, activeTab])
+
+    const renderTable = (tableData) => {
+        if (loading) {
+            return (
+                <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                    <p className="text-muted-foreground mt-4">Loading monitors...</p>
+                </div>
+            )
+        }
+        if (error) {
+            return (
+                <div className="text-center py-12">
+                    <p className="text-destructive mb-4 font-medium">Error: {error}</p>
+                    <Button onClick={handleManualRefresh} variant="outline">
+                        Retry
+                    </Button>
+                </div>
+            )
+        }
+        return <DataTable data={tableData} onRefresh={fetchURLs} />
+    }
+
+    return (
+        <SidebarProvider
+            style={{
+                "--sidebar-width": "calc(var(--spacing) * 72)",
+                "--header-height": "calc(var(--spacing) * 12)",
+            }}
+        >
+            <AppSidebar variant="inset" />
+            <SidebarInset>
+                <SiteHeader />
+                <div className="flex flex-1 flex-col">
+                    <div className="@container/main flex flex-1 flex-col gap-2">
+                        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+
+                            {/* Stats cards only on monitor tabs */}
+                            {["all", "active", "down"].includes(activeTab) && (
+                                <SectionCards data={data} loading={loading} />
+                            )}
+
+                            <Tabs
+                                value={activeTab}
+                                onValueChange={handleTabChange}
+                                className="w-full px-4 lg:px-6"
+                            >
+                                <div className="flex flex-col gap-3 mb-4">
+                                    <div className="overflow-x-auto pb-1">
+                                        <TabsList className="w-max">
+                                            <TabsTrigger value="all">All Monitors</TabsTrigger>
+                                            <TabsTrigger value="active">Active</TabsTrigger>
+                                            <TabsTrigger
+                                                value="down"
+                                                className="data-[state=active]:text-red-600"
+                                            >
+                                                Incidents
+                                                {incidentCount > 0 && (
+                                                    <span className="ml-1.5 inline-flex items-center justify-center size-5 rounded-full bg-red-500 text-white text-xs font-bold">
+                                                        {incidentCount}
+                                                    </span>
+                                                )}
+                                            </TabsTrigger>
+                                            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                                            <TabsTrigger value="settings">Settings</TabsTrigger>
+                                            <TabsTrigger value="reports">Reports</TabsTrigger>
+                                        </TabsList>
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                        {lastUpdated && ["all", "active", "down"].includes(activeTab) && (
+                                            <span className="text-sm text-muted-foreground hidden sm:block">
+                                                Updated: {lastUpdated.toLocaleTimeString()}
+                                            </span>
+                                        )}
+                                        {["all", "active", "down"].includes(activeTab) && (
+                                            <>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleManualRefresh}
+                                                    disabled={isRefreshing || loading}
+                                                >
+                                                    <IconRefresh className={isRefreshing ? "animate-spin" : ""} />
+                                                    {isRefreshing ? "Refreshing..." : "Refresh"}
+                                                </Button>
+                                                <AddURLDialog onURLAdded={handleURLAdded} />
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <TabsContent value="all" className="space-y-4">
+                                    <ChartAreaInteractive data={data} />
+                                    {renderTable(data)}
+                                </TabsContent>
+
+                                <TabsContent value="active" className="space-y-4">
+                                    <ChartAreaInteractive data={filteredData} />
+                                    {renderTable(filteredData)}
+                                </TabsContent>
+
+                                <TabsContent value="down" className="space-y-4">
+                                    <ChartAreaInteractive data={filteredData} />
+                                    {renderTable(filteredData)}
+                                </TabsContent>
+
+                                <TabsContent value="analytics" className="space-y-4">
+                                    <AnalyticsTab data={data} loading={loading} />
+                                </TabsContent>
+
+                                <TabsContent value="settings" className="space-y-4">
+                                    <SettingsTab
+                                        data={data}
+                                        loading={loading}
+                                        onRefresh={handleManualRefresh}
+                                    />
+                                </TabsContent>
+
+                                <TabsContent value="reports" className="space-y-4">
+                                    <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
+                                        <p className="text-lg font-medium mb-2">Reports Coming Soon</p>
+                                        <p className="text-sm">Downloadable uptime reports and SLA summaries will appear here.</p>
+                                    </div>
+                                </TabsContent>
+                            </Tabs>
+                        </div>
+                    </div>
+                </div>
+            </SidebarInset>
+        </SidebarProvider>
+    )
+}
+
+export default function Page() {
+    return (
+        <ProtectedRoute>
+            <Suspense fallback={
+                <div className="flex items-center justify-center min-h-screen">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+                        <p className="text-muted-foreground">Loading dashboard...</p>
+                    </div>
+                </div>
+            }>
+                <DashboardContent />
+            </Suspense>
+        </ProtectedRoute>
+    )
+}

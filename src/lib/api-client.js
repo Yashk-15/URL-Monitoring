@@ -1,0 +1,209 @@
+// API client with Cognito authentication
+import { fetchAuthSession } from "aws-amplify/auth"
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE
+
+if (!API_BASE) {
+    console.error(
+        '[api-client] NEXT_PUBLIC_API_BASE is not set! ' +
+        'Add it to your .env.local file: ' +
+        'NEXT_PUBLIC_API_BASE=https://gdo6x7ra5c.execute-api.ap-south-1.amazonaws.com'
+    )
+}
+
+// ─── Token Cache ───────────────────────────────────────────────────────────────
+// Cognito ID tokens are valid for 1 hour. Cache the token and only refresh it
+// when it's within 5 minutes of expiry, eliminating a network round-trip per
+// request.
+let _cachedToken = null
+let _tokenExpiresAt = 0 // Unix ms
+
+/**
+ * Wipe the cached Cognito token. Must be called on logout so a subsequent
+ * login on the same tab cannot reuse the previous user's token.
+ */
+export function clearTokenCache() {
+    _cachedToken = null
+    _tokenExpiresAt = 0
+}
+
+async function getAuthToken() {
+    const now = Date.now()
+    // Reuse cached token if still valid (5-min safety margin before expiry)
+    if (_cachedToken && now < _tokenExpiresAt - 5 * 60 * 1000) {
+        return _cachedToken
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        console.debug('[api-client] Refreshing Cognito token...')
+    }
+
+    const session = await fetchAuthSession()
+    const token = session.tokens?.idToken?.toString()
+
+    if (token) {
+        // Cognito ID tokens expire in 1 hour by default
+        _cachedToken = token
+        _tokenExpiresAt = now + 60 * 60 * 1000
+    } else {
+        // Clear cache so the next call retries
+        _cachedToken = null
+        _tokenExpiresAt = 0
+    }
+
+    return token
+}
+
+export const apiClient = {
+    async request(endpoint, options = {}) {
+        if (!API_BASE) {
+            throw new Error('API base URL is not configured. Check NEXT_PUBLIC_API_BASE in .env.local')
+        }
+
+        try {
+            const token = await getAuthToken()
+
+            // If no token, session has expired — redirect to login
+            if (!token) {
+                console.warn('[api-client] No auth token found, redirecting to login')
+                if (typeof window !== 'undefined') {
+                    // Use replace() so login page doesn't pile up in history
+                    window.location.replace('/login')
+                }
+                throw new Error('No authentication token available')
+            }
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                ...options.headers,
+            }
+
+            const url = `${API_BASE}${endpoint}`
+            // Only log in development to avoid leaking endpoint details in production
+            if (process.env.NODE_ENV === 'development') {
+                console.debug(`[api-client] ${options.method || 'GET'} ${url}`)
+            }
+
+            const response = await fetch(url, {
+                ...options,
+                headers,
+            })
+
+            // Handle 401/403 — expired or invalid token
+            if (response.status === 401 || response.status === 403) {
+                console.warn('[api-client] Auth error, redirecting to login')
+                if (typeof window !== 'undefined') {
+                    window.location.replace('/login')
+                }
+                throw new Error(`Authentication failed: ${response.status}`)
+            }
+
+            return response
+        } catch (error) {
+            // Re-throw auth redirects
+            if (error.message.includes('Authentication failed') ||
+                error.message.includes('No authentication token')) {
+                throw error
+            }
+            console.error('[api-client] Request error:', error)
+            throw error
+        }
+    },
+
+    async get(endpoint) {
+        return this.request(endpoint, { method: 'GET' })
+    },
+
+    async post(endpoint, data) {
+        return this.request(endpoint, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        })
+    },
+
+    async put(endpoint, data) {
+        return this.request(endpoint, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        })
+    },
+
+    async delete(endpoint) {
+        return this.request(endpoint, { method: 'DELETE' })
+    },
+}
+
+/**
+ * Safely extract an array from various API response shapes:
+ *   - Raw array:          [...]
+ *   - Wrapped:            { data: [...] }
+ *   - Wrapped alternate:  { urls: [...] }
+ *   - Wrapped alternate:  { logs: [...] }
+ *   - Single object:      {...}  → wrapped in [] ONLY if it looks like a URL record
+ */
+export function extractArray(result, keys = ['data', 'urls', 'logs', 'items']) {
+    if (!result) return []
+    if (Array.isArray(result)) return result
+    if (typeof result === 'object') {
+        for (const key of keys) {
+            if (Array.isArray(result[key])) return result[key]
+        }
+        // Only wrap a single object if it looks like a URL/log record,
+        // not an error response (which would have 'message' or 'error' keys)
+        if (!result.message && !result.error && !result.errorMessage) {
+            return [result]
+        }
+    }
+    return []
+}
+
+/**
+ * Normalise a URL record from DynamoDB/Lambda into the shape
+ * all frontend components expect.
+ *
+ * DynamoDB primary key is URLid (String).
+ * Lambda enriches with: status, responseTime, uptime, lastCheck, etc.
+ */
+export function normaliseURL(raw) {
+    return {
+        // Always use URLid as the canonical id
+        id: raw.URLid || raw.id || '',
+        name: raw.name || 'Unnamed URL',
+        url: raw.url || '',
+        enabled: raw.enabled ?? true,
+        expectedStatus: raw.expectedStatus || 200,
+        maxLatencyMs: raw.maxLatencyMs || 3000,
+        timeoutSeconds: raw.timeoutSeconds || 5,
+        region: raw.region || 'ap-south-1',
+
+        // Health data — provided by Lambda when enriching from URL_Health_details
+        status: raw.status || 'Unknown',                    // "Up" | "Down" | "Warning" | "Unknown"
+        responseTime: String(raw.responseTime || '0'),       // ms as string for display
+        uptime: String(raw.uptime || '0'),                   // percentage as string
+        lastCheck: raw.lastCheck || raw.Timestamp || 'Never',
+        statusCode: raw.statusCode || null,
+        errorMsg: raw.errorMsg || raw.error || null,
+        isUp: raw.isUp ?? null,
+        isSlow: raw.isSlow ?? null,
+    }
+}
+
+/**
+ * Normalise a log record from URL_Health_details table.
+ * PK = URLid, SK = Timestamp
+ */
+export function normaliseLog(raw) {
+    return {
+        urlId: raw.URLid || raw.urlId || '',
+        timestamp: raw.Timestamp || raw.timestamp || '',
+        // Lambda stores response time as latencyMs in URL_Health_details table
+        responseTime: parseInt(raw.latencyMs || raw.responseTime || raw.ResponseTime || raw.LatencyMs || 0),
+        statusCode: raw.statusCode || raw.StatusCode || null,
+        // Fixed: 'Unknown' is now reachable when isUp is null/undefined
+        status: raw.status || (raw.isUp != null ? (raw.isUp ? 'Up' : 'Down') : 'Unknown'),
+        errorMsg: raw.errorMsg || raw.error || null,
+        isUp: raw.isUp ?? true,
+        isSlow: raw.isSlow ?? false,
+    }
+}
