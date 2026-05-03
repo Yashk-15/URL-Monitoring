@@ -7,7 +7,6 @@ export function LiveStatusIndicator({ status, className }) {
     const [pulse, setPulse] = useState(false)
 
     useEffect(() => {
-        // Pulse animation for active statuses
         if (status === "Up" || status === "Down") {
             const interval = setInterval(() => {
                 setPulse(prev => !prev)

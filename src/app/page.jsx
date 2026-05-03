@@ -67,7 +67,7 @@ export default function SplashPage() {
             opacity: isExiting ? 0 : 1,
             transform: isExiting ? "scale(1.03)" : "scale(1)",
         }}>
-            {/* Subtle top gradient */}
+            {}
             <div style={{
                 position: "absolute", inset: 0, pointerEvents: "none",
                 background: "radial-gradient(ellipse 700px 400px at 50% -10%, rgba(0,0,0,0.04) 0%, transparent 70%)",
@@ -83,8 +83,8 @@ export default function SplashPage() {
                 alignItems: "center",
                 gap: 28,
             }}>
-                {/* Logo + title */}
-                {/* WELCOME heading */}
+                {}
+                {}
                 <div style={{
                     animation: "fadeSlideUp 0.4s ease both",
                     textAlign: "center",
@@ -118,7 +118,7 @@ export default function SplashPage() {
                         boxShadow: "0 1px 8px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)",
                         position: "relative",
                     }}>
-                        {/* Ping ring */}
+                        {}
                         <div style={{
                             position: "absolute", width: 68, height: 68, borderRadius: 18,
                             border: "1.5px solid rgba(0,0,0,0.15)",
@@ -138,7 +138,7 @@ export default function SplashPage() {
                     </div>
                 </div>
 
-                {/* URL panel */}
+                {}
                 <div style={{
                     width: "100%",
                     border: "1px solid var(--border, #e5e7eb)",
@@ -148,7 +148,7 @@ export default function SplashPage() {
                     boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
                     animation: "fadeSlideUp 0.55s ease 0.15s both",
                 }}>
-                    {/* Panel header */}
+                    {}
                     <div style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center",
                         padding: "9px 14px",
@@ -173,7 +173,7 @@ export default function SplashPage() {
                             opacity: urlsVisible[i] ? 1 : 0,
                             transform: urlsVisible[i] ? "translateX(0)" : "translateX(-10px)",
                         }}>
-                            {/* Status dot with ping */}
+                            {}
                             <div style={{ position: "relative", width: 8, height: 8, flexShrink: 0 }}>
                                 <div style={{
                                     width: 8, height: 8, borderRadius: "50%",
@@ -203,14 +203,14 @@ export default function SplashPage() {
                     ))}
                 </div>
 
-                {/* Stats row */}
+                {}
                 <div style={{
                     width: "100%", display: "flex", gap: 12,
                     transition: "opacity 0.45s ease, transform 0.45s ease",
                     opacity: phase >= 2 ? 1 : 0,
                     transform: phase >= 2 ? "translateY(0)" : "translateY(8px)",
                 }}>
-                    {/* Uptime bars */}
+                    {}
                     <div style={{
                         flex: 2,
                         border: "1px solid var(--border, #e5e7eb)",
@@ -235,7 +235,7 @@ export default function SplashPage() {
                         <p style={{ margin: "8px 0 0", fontSize: 20, fontWeight: 700, color: "var(--foreground, #111)" }}>99.8%</p>
                     </div>
 
-                    {/* Stat cards */}
+                    {}
                     <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
                         {[
                             { label: "Alerts Today", value: "2", accent: "#d97706" },
@@ -258,7 +258,7 @@ export default function SplashPage() {
                     </div>
                 </div>
 
-                {/* Progress bar */}
+                {}
                 <div style={{
                     width: "55%", height: 2, borderRadius: 2,
                     background: "var(--border, #e5e7eb)", overflow: "hidden",

@@ -38,7 +38,6 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 
-// ─── Profile dialog ────────────────────────────────────────────────────────────
 function ProfileDialog({ open, onOpenChange, user, initials }) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -48,7 +47,7 @@ function ProfileDialog({ open, onOpenChange, user, initials }) {
                 </DialogHeader>
 
                 <div className="flex flex-col items-center gap-4 py-4">
-                    {/* Avatar */}
+                    {}
                     <Avatar className="h-20 w-20 rounded-full ring-2 ring-primary/20">
                         <AvatarImage src={user.avatar} alt={user.name} />
                         <AvatarFallback className="rounded-full text-xl font-bold bg-primary/10 text-primary">
@@ -56,14 +55,14 @@ function ProfileDialog({ open, onOpenChange, user, initials }) {
                         </AvatarFallback>
                     </Avatar>
 
-                    {/* Name */}
+                    {}
                     <div className="text-center">
                         <p className="text-lg font-semibold">{user.name || "User"}</p>
                         <p className="text-sm text-muted-foreground">{user.email}</p>
                     </div>
                 </div>
 
-                {/* Info rows */}
+                {}
                 <div className="space-y-3 border-t pt-4">
                     <div className="flex items-center gap-3 text-sm">
                         <IconMail className="size-4 text-muted-foreground shrink-0" />
@@ -86,7 +85,6 @@ function ProfileDialog({ open, onOpenChange, user, initials }) {
     )
 }
 
-// ─── Main component ────────────────────────────────────────────────────────────
 export function NavUser({ user }) {
     const { isMobile } = useSidebar()
     const { logout } = useAuth()
@@ -129,7 +127,7 @@ export function NavUser({ user }) {
                             align="end"
                             sideOffset={4}
                         >
-                            {/* User info header */}
+                            {}
                             <DropdownMenuLabel className="p-0 font-normal">
                                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                                     <Avatar className="h-8 w-8 rounded-lg">
@@ -145,7 +143,7 @@ export function NavUser({ user }) {
 
                             <DropdownMenuSeparator />
 
-                            {/* Profile — opens a dialog with user info */}
+                            {}
                             <DropdownMenuItem
                                 onClick={() => setProfileOpen(true)}
                                 className="cursor-pointer"
@@ -168,7 +166,7 @@ export function NavUser({ user }) {
                 </SidebarMenuItem>
             </SidebarMenu>
 
-            {/* Profile dialog rendered outside the dropdown to avoid nesting issues */}
+            {}
             <ProfileDialog
                 open={profileOpen}
                 onOpenChange={setProfileOpen}

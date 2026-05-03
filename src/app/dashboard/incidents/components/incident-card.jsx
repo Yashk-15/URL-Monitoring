@@ -78,7 +78,7 @@ export function IncidentCard({ incident }) {
 
             {isExpanded && (
                 <CardContent className="pt-4 space-y-4">
-                    {/* Incident Details */}
+                    {}
                     <div className="space-y-2">
                         <div>
                             <div className="text-sm font-medium mb-1">Description</div>

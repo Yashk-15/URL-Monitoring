@@ -15,15 +15,12 @@ import {
     IconClockHour4,
 } from "@tabler/icons-react"
 
-// ─── Top 75 global websites ──────────────────────────────────────────────────
 const TOP_SITES = [
-    // Search
     { name: "Google",        url: "https://www.google.com",         category: "Search" },
     { name: "Bing",          url: "https://www.bing.com",           category: "Search" },
     { name: "DuckDuckGo",    url: "https://duckduckgo.com",         category: "Search" },
     { name: "Yahoo",         url: "https://www.yahoo.com",          category: "Search" },
     { name: "Baidu",         url: "https://www.baidu.com",          category: "Search" },
-    // Social
     { name: "Facebook",      url: "https://www.facebook.com",       category: "Social" },
     { name: "Instagram",     url: "https://www.instagram.com",      category: "Social" },
     { name: "Twitter / X",   url: "https://x.com",                  category: "Social" },
@@ -34,13 +31,11 @@ const TOP_SITES = [
     { name: "Snapchat",      url: "https://www.snapchat.com",       category: "Social" },
     { name: "Quora",         url: "https://www.quora.com",          category: "Social" },
     { name: "Tumblr",        url: "https://www.tumblr.com",         category: "Social" },
-    // Video
     { name: "YouTube",       url: "https://www.youtube.com",        category: "Video" },
     { name: "Netflix",       url: "https://www.netflix.com",        category: "Video" },
     { name: "Twitch",        url: "https://www.twitch.tv",          category: "Video" },
     { name: "Vimeo",         url: "https://vimeo.com",              category: "Video" },
     { name: "Disney+",       url: "https://www.disneyplus.com",     category: "Video" },
-    // Tech
     { name: "GitHub",        url: "https://github.com",             category: "Tech" },
     { name: "Stack Overflow",url: "https://stackoverflow.com",      category: "Tech" },
     { name: "GitLab",        url: "https://gitlab.com",             category: "Tech" },
@@ -51,27 +46,23 @@ const TOP_SITES = [
     { name: "Cloudflare",    url: "https://www.cloudflare.com",     category: "Tech" },
     { name: "AWS",           url: "https://aws.amazon.com",         category: "Tech" },
     { name: "Heroku",        url: "https://www.heroku.com",         category: "Tech" },
-    // E-Commerce
     { name: "Amazon",        url: "https://www.amazon.com",         category: "Shopping" },
     { name: "eBay",          url: "https://www.ebay.com",           category: "Shopping" },
     { name: "Alibaba",       url: "https://www.alibaba.com",        category: "Shopping" },
     { name: "Etsy",          url: "https://www.etsy.com",           category: "Shopping" },
     { name: "Shopify",       url: "https://www.shopify.com",        category: "Shopping" },
     { name: "Flipkart",      url: "https://www.flipkart.com",       category: "Shopping" },
-    // News
     { name: "BBC",           url: "https://www.bbc.com",            category: "News" },
     { name: "CNN",           url: "https://www.cnn.com",            category: "News" },
     { name: "Reuters",       url: "https://www.reuters.com",        category: "News" },
     { name: "The Guardian",  url: "https://www.theguardian.com",    category: "News" },
     { name: "NY Times",      url: "https://www.nytimes.com",        category: "News" },
     { name: "Al Jazeera",    url: "https://www.aljazeera.com",      category: "News" },
-    // Finance
     { name: "PayPal",        url: "https://www.paypal.com",         category: "Finance" },
     { name: "Stripe",        url: "https://stripe.com",             category: "Finance" },
     { name: "Coinbase",      url: "https://www.coinbase.com",       category: "Finance" },
     { name: "Robinhood",     url: "https://robinhood.com",          category: "Finance" },
     { name: "Bloomberg",     url: "https://www.bloomberg.com",      category: "Finance" },
-    // Productivity
     { name: "Notion",        url: "https://www.notion.so",          category: "Productivity" },
     { name: "Slack",         url: "https://slack.com",              category: "Productivity" },
     { name: "Zoom",          url: "https://zoom.us",                category: "Productivity" },
@@ -80,27 +71,22 @@ const TOP_SITES = [
     { name: "Figma",         url: "https://www.figma.com",          category: "Productivity" },
     { name: "Dropbox",       url: "https://www.dropbox.com",        category: "Productivity" },
     { name: "Google Drive",  url: "https://drive.google.com",       category: "Productivity" },
-    // Education
     { name: "Wikipedia",     url: "https://www.wikipedia.org",      category: "Education" },
     { name: "Coursera",      url: "https://www.coursera.org",       category: "Education" },
     { name: "Udemy",         url: "https://www.udemy.com",          category: "Education" },
     { name: "Khan Academy",  url: "https://www.khanacademy.org",    category: "Education" },
     { name: "Medium",        url: "https://medium.com",             category: "Education" },
-    // Infrastructure
     { name: "Cloudflare CDN",url: "https://1.1.1.1",               category: "Infrastructure" },
     { name: "Google DNS",    url: "https://8.8.8.8",               category: "Infrastructure" },
     { name: "Akamai",        url: "https://www.akamai.com",         category: "Infrastructure" },
-    // Gaming
     { name: "Steam",         url: "https://store.steampowered.com", category: "Gaming" },
     { name: "Epic Games",    url: "https://www.epicgames.com",      category: "Gaming" },
     { name: "PlayStation",   url: "https://www.playstation.com",    category: "Gaming" },
     { name: "Xbox",          url: "https://www.xbox.com",           category: "Gaming" },
-    // AI
     { name: "OpenAI",        url: "https://openai.com",             category: "AI" },
     { name: "Anthropic",     url: "https://www.anthropic.com",      category: "AI" },
     { name: "Hugging Face",  url: "https://huggingface.co",         category: "AI" },
     { name: "Perplexity",    url: "https://www.perplexity.ai",      category: "AI" },
-    // Misc
     { name: "Spotify",       url: "https://www.spotify.com",        category: "Music" },
     { name: "SoundCloud",    url: "https://soundcloud.com",         category: "Music" },
     { name: "Apple",         url: "https://www.apple.com",          category: "Tech" },
@@ -109,12 +95,8 @@ const TOP_SITES = [
 
 const CATEGORIES = ["All", ...Array.from(new Set(TOP_SITES.map(s => s.category))).sort()]
 
-const LATENCY_WARNING = 1500  // ms — flag as Warning if slower
+const LATENCY_WARNING = 1500
 
-// ─── Single streaming batch call ─────────────────────────────────────────────
-// Sends all URLs to /api/ping-batch in ONE request.
-// The server pings them all in parallel and streams back SSE events
-// (one per URL) as each result lands — no artificial client-side batching needed.
 async function* streamPingBatch(sites, signal) {
     const res = await fetch('/api/ping-batch', {
         method: 'POST',
@@ -133,16 +115,15 @@ async function* streamPingBatch(sites, signal) {
         if (done) break
         buf += dec.decode(value, { stream: true })
         const parts = buf.split('\n\n')
-        buf = parts.pop()   // keep incomplete tail
+        buf = parts.pop()
         for (const part of parts) {
             const line = part.replace(/^data:\s*/, '').trim()
             if (!line) continue
-            try { yield JSON.parse(line) } catch { /* skip malformed */ }
+            try { yield JSON.parse(line) } catch {  }
         }
     }
 }
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusPill({ status }) {
     if (status === "Up") return (
         <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
@@ -171,7 +152,6 @@ function StatusPill({ status }) {
     )
 }
 
-// ─── Site card ────────────────────────────────────────────────────────────────
 function SiteCard({ site }) {
     const { name, url, category, status, responseTime, statusCode } = site
 
@@ -184,7 +164,7 @@ function SiteCard({ site }) {
 
     return (
         <div className={`group relative rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:border-primary/30 ${isDown ? "border-red-200 dark:border-red-900/40" : ""}`}>
-            {/* Header */}
+            {}
             <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm truncate">{name}</p>
@@ -201,7 +181,7 @@ function SiteCard({ site }) {
                 <StatusPill status={status} />
             </div>
 
-            {/* Metrics */}
+            {}
             <div className="flex items-center justify-between">
                 <Badge variant="outline" className="text-xs font-normal">
                     {category}
@@ -224,7 +204,6 @@ function SiteCard({ site }) {
     )
 }
 
-// ─── Main component ────────────────────────────────────────────────────────────
 export function GlobalMonitorTab() {
     const [siteData, setSiteData] = useState(
         TOP_SITES.reduce((acc, s) => ({ ...acc, [s.id]: { ...s, status: null } }), {})
@@ -233,20 +212,17 @@ export function GlobalMonitorTab() {
     const [progress, setProgress] = useState(0)
     const [search, setSearch] = useState("")
     const [category, setCategory] = useState("All")
-    const [sortBy, setSortBy] = useState("default")  // default | latency | status
+    const [sortBy, setSortBy] = useState("default")
     const abortCtrlRef = useRef(null)
 
-    // One request for all 75 — results stream in as each ping completes
     const checkAll = useCallback(async () => {
         setChecking(true)
         setProgress(0)
 
-        // Cancel any in-flight stream
         abortCtrlRef.current?.abort()
         const ctrl = new AbortController()
         abortCtrlRef.current = ctrl
 
-        // Reset all to "Checking"
         setSiteData(prev => {
             const next = { ...prev }
             TOP_SITES.forEach(s => {
@@ -278,7 +254,6 @@ export function GlobalMonitorTab() {
         setChecking(false)
     }
 
-    // Filter + sort
     const sites = Object.values(siteData)
         .filter(s => {
             const matchCat = category === "All" || s.category === category
@@ -294,7 +269,6 @@ export function GlobalMonitorTab() {
             return a.id - b.id
         })
 
-    // Stats
     const checked = Object.values(siteData).filter(s => s.status && s.status !== "Checking").length
     const upCount   = Object.values(siteData).filter(s => s.status === "Up").length
     const downCount = Object.values(siteData).filter(s => s.status === "Down" || s.status === "Error").length
@@ -302,7 +276,7 @@ export function GlobalMonitorTab() {
 
     return (
         <div className="space-y-4">
-            {/* Header */}
+            {}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h2 className="text-lg font-bold tracking-tight">Global Monitor</h2>
@@ -330,7 +304,7 @@ export function GlobalMonitorTab() {
                 </div>
             </div>
 
-            {/* Stats bar */}
+            {}
             {checked > 0 && (
                 <div className="flex gap-4 flex-wrap text-sm">
                     <span className="text-muted-foreground">{checked}/{TOP_SITES.length} checked</span>
@@ -340,7 +314,7 @@ export function GlobalMonitorTab() {
                 </div>
             )}
 
-            {/* Progress bar */}
+            {}
             {checking && (
                 <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                     <div
@@ -350,7 +324,7 @@ export function GlobalMonitorTab() {
                 </div>
             )}
 
-            {/* Filters */}
+            {}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2 flex-wrap">
                     {CATEGORIES.map(cat => (
@@ -389,7 +363,7 @@ export function GlobalMonitorTab() {
                 </div>
             </div>
 
-            {/* Grid */}
+            {}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {sites.map(site => (
                     <SiteCard key={site.id} site={site} />

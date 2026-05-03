@@ -23,7 +23,6 @@ import {
     IconActivity,
 } from "@tabler/icons-react"
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
     const map = {
         Up:      "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
@@ -38,7 +37,6 @@ function StatusBadge({ status }) {
     )
 }
 
-// ─── Custom tooltip for distribution chart ────────────────────────────────────
 function DistTooltip({ active, payload }) {
     if (!active || !payload?.length) return null
     const { name, count, pct } = payload[0].payload
@@ -50,7 +48,6 @@ function DistTooltip({ active, payload }) {
     )
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
 function EmptyState({ message }) {
     return (
         <div className="flex flex-col items-center justify-center py-14 text-muted-foreground gap-3">
@@ -60,10 +57,8 @@ function EmptyState({ message }) {
     )
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
 export function AnalyticsTab({ data = [], loading = false }) {
 
-    // ── Derived stats ─────────────────────────────────────────────────────────
     const total   = data.length
     const upCount = data.filter(u => u.status === "Up").length
     const downCount = data.filter(u => u.status === "Down").length
@@ -77,7 +72,6 @@ export function AnalyticsTab({ data = [], loading = false }) {
         ? (data.reduce((s, u) => s + (parseFloat(u.uptime) || 0), 0) / total).toFixed(1)
         : "0.0"
 
-    // ── Response time distribution ────────────────────────────────────────────
     const fast   = data.filter(u => (parseInt(u.responseTime) || 0) < 300).length
     const normal = data.filter(u => { const r = parseInt(u.responseTime) || 0; return r >= 300 && r < 700 }).length
     const slow   = data.filter(u => (parseInt(u.responseTime) || 0) >= 700).length
@@ -88,18 +82,15 @@ export function AnalyticsTab({ data = [], loading = false }) {
         { name: "Slow (>700ms)",   count: slow,   pct: total ? Math.round(slow   / total * 100) : 0, color: "#ef4444" },
     ]
 
-    // ── Per-URL uptime sorted descending ──────────────────────────────────────
     const sortedByUptime = [...data].sort(
         (a, b) => parseFloat(b.uptime || 0) - parseFloat(a.uptime || 0)
     )
 
-    // ── Slowest monitors ──────────────────────────────────────────────────────
     const slowest = [...data]
         .filter(u => parseInt(u.responseTime) > 0)
         .sort((a, b) => parseInt(b.responseTime) - parseInt(a.responseTime))
         .slice(0, 5)
 
-    // ── Loading skeleton ──────────────────────────────────────────────────────
     if (loading) {
         return (
             <div className="space-y-6">
@@ -117,7 +108,7 @@ export function AnalyticsTab({ data = [], loading = false }) {
     return (
         <div className="space-y-6">
 
-            {/* ── 1. Compact health overview banner ── */}
+            {}
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-muted/30 px-5 py-3.5">
                 <div className="flex items-center gap-2">
                     <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
@@ -145,7 +136,7 @@ export function AnalyticsTab({ data = [], loading = false }) {
 
             <div className="grid grid-cols-1 gap-6 @xl/main:grid-cols-2">
 
-                {/* ── 2. Per-URL uptime breakdown ── */}
+                {}
                 <Card>
                     <CardHeader>
                         <CardTitle>Uptime Breakdown</CardTitle>
@@ -180,7 +171,7 @@ export function AnalyticsTab({ data = [], loading = false }) {
                     </CardContent>
                 </Card>
 
-                {/* ── 3. Response time distribution ── */}
+                {}
                 <Card>
                     <CardHeader>
                         <CardTitle>Response Time Distribution</CardTitle>
@@ -216,7 +207,7 @@ export function AnalyticsTab({ data = [], loading = false }) {
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
-                                {/* Legend */}
+                                {}
                                 <div className="flex gap-4 mt-3 justify-center flex-wrap">
                                     {distData.map(d => (
                                         <div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -233,7 +224,7 @@ export function AnalyticsTab({ data = [], loading = false }) {
                 </Card>
             </div>
 
-            {/* ── 4. Slowest monitors ── */}
+            {}
             {slowest.length > 0 && (
                 <Card>
                     <CardHeader>

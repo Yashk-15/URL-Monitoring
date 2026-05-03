@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/card"
 
 export function SectionCards({ data = [], loading = false }) {
-    // Separate enabled vs paused monitors
     const enabledData = data.filter(url => url?.enabled !== false)
     const pausedCount = data.length - enabledData.length
 
@@ -20,7 +19,6 @@ export function SectionCards({ data = [], loading = false }) {
     const failedChecks  = enabledData.filter(url => url?.status === "Down").length
     const warningChecks = enabledData.filter(url => url?.status === "Warning").length
 
-    // Average uptime — only enabled monitors
     const avgUptimeNum = enabledData.length > 0
         ? enabledData.reduce((sum, url) => {
             const uptime = url?.uptime ? parseFloat(url.uptime) : 0
@@ -29,7 +27,6 @@ export function SectionCards({ data = [], loading = false }) {
         : 0
     const avgUptime = avgUptimeNum.toFixed(1)
 
-    // Average response time — only enabled monitors
     const avgResponseTime = enabledData.length > 0
         ? Math.round(enabledData.reduce((sum, url) => {
             const responseTime = url?.responseTime ? parseInt(url.responseTime) : 0

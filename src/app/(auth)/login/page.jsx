@@ -19,11 +19,9 @@ export default function LoginPage() {
         setLoading(true)
 
         try {
-            // Try to sign out first in case there's an existing session
             try {
                 await logout()
             } catch (logoutError) {
-                // Ignore logout errors, user might not be signed in
             }
 
             const result = await login(email, password)
@@ -42,7 +40,7 @@ export default function LoginPage() {
     return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
             <div className="w-full max-w-md">
-                {/* Logo/Header */}
+                {}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-t from-primary/5 to-card border border-border rounded-2xl mb-4 shadow-sm">
                         <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,7 +51,7 @@ export default function LoginPage() {
                     <p className="text-muted-foreground mt-2">Sign in or create an account to get started</p>
                 </div>
 
-                {/* Login Form */}
+                {}
                 <div className="bg-gradient-to-t from-primary/5 to-card rounded-2xl shadow-xs p-8 border border-border">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {error && (
@@ -134,7 +132,7 @@ export default function LoginPage() {
                     </div>
                 </div>
 
-                {/* Footer Note */}
+                {}
                 <p className="text-center text-sm text-muted-foreground mt-6">
                     By signing in, you agree to our Terms of Service and Privacy Policy
                 </p>

@@ -1,4 +1,3 @@
-// API client with Cognito authentication
 import { fetchAuthSession } from "aws-amplify/auth"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE
@@ -11,7 +10,6 @@ if (!API_BASE) {
     )
 }
 
-// ─── Token Cache ───────────────────────────────────────────────────────────────
 let _cachedToken = null
 let _tokenExpiresAt = 0
 
@@ -39,10 +37,6 @@ async function getAuthToken() {
     return token
 }
 
-/**
- * Call this on logout so the cached token from the previous session
- * is not reused if another user signs in on the same tab/window.
- */
 export function clearTokenCache() {
     _cachedToken = null
     _tokenExpiresAt = 0

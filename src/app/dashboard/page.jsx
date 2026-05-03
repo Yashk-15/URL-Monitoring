@@ -20,7 +20,6 @@ import { useURLData } from "@/hooks/use-url-data"
 import { AnalyticsTab } from "@/app/dashboard/components/analytics-tab"
 import { SettingsTab } from "@/app/dashboard/components/settings-tab"
 
-// Tab value ↔ query-param mapping
 const VIEW_TO_TAB = {
     all: "all",
     active: "active",
@@ -38,7 +37,6 @@ function DashboardContent() {
     const pathname = usePathname()
     const searchParams = useSearchParams()
 
-    // Auto-refresh disabled on the overview dashboard — manual refresh only
     const {
         data,
         loading,
@@ -50,7 +48,6 @@ function DashboardContent() {
         handleManualRefresh,
     } = useURLData({ autoRefresh: false })
 
-    // Derive active tab from URL — keeps URL and UI in sync bidirectionally
     const viewParam = searchParams.get("view") || "all"
     const activeTab = VIEW_TO_TAB[viewParam] || "all"
 
@@ -66,7 +63,6 @@ function DashboardContent() {
         router.push(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false })
     }
 
-    // Pre-compute incident count once to avoid filtering data twice in render
     const incidentCount = useMemo(
         () => data.filter(d => d.status === "Down" || d.status === "Warning").length,
         [data]
@@ -114,7 +110,7 @@ function DashboardContent() {
                     <div className="@container/main flex flex-1 flex-col gap-2">
                         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
 
-                            {/* Stats cards only on monitor tabs */}
+                            {}
                             {["all", "active", "down"].includes(activeTab) && (
                                 <SectionCards data={data} loading={loading} />
                             )}

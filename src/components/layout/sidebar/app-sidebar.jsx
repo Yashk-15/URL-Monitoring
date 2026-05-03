@@ -81,7 +81,7 @@ export function AppSidebar({ ...props }) {
 
             <SidebarContent>
                 <NavMain items={navItems} />
-                {/* NavDocuments removed — no document-type data in this app */}
+                {}
                 <NavSecondary items={[]} className="mt-auto" />
             </SidebarContent>
 

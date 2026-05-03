@@ -36,7 +36,6 @@ const LS_KEY_THRESHOLD = "urlmonitor_latency_threshold"
 const LS_KEY_INTERVAL  = "urlmonitor_check_interval"
 
 
-// ─── Toggle switch ────────────────────────────────────────────────────────────
 function Toggle({ checked, onChange, disabled }) {
     return (
         <button
@@ -62,7 +61,6 @@ function Toggle({ checked, onChange, disabled }) {
     )
 }
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
     const map = {
         Up:      "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
@@ -77,7 +75,6 @@ function StatusBadge({ status }) {
     )
 }
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
 function Section({ title, description, icon: Icon, children }) {
     return (
         <Card>
@@ -97,19 +94,15 @@ function Section({ title, description, icon: Icon, children }) {
     )
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
 export function SettingsTab({ data = [], loading = false, onRefresh }) {
 
-    // ── Persisted preferences ─────────────────────────────────────────────────
     const [threshold, setThreshold] = useState("")
     const [interval,  setInterval_]  = useState("30s")
-    const [notifPerm, setNotifPerm]  = useState("default") // "default" | "granted" | "denied"
+    const [notifPerm, setNotifPerm]  = useState("default")
 
-    // Monitor enable/disable state keyed by id
     const [enabledMap, setEnabledMap] = useState({})
     const [togglingId, setTogglingId] = useState(null)
 
-    // Load from localStorage on mount
     useEffect(() => {
         setThreshold(localStorage.getItem(LS_KEY_THRESHOLD) ?? "3000")
         setInterval_(localStorage.getItem(LS_KEY_INTERVAL) ?? "30s")
@@ -118,14 +111,12 @@ export function SettingsTab({ data = [], loading = false, onRefresh }) {
         }
     }, [])
 
-    // Initialise enabledMap from data
     useEffect(() => {
         const map = {}
         data.forEach(u => { map[u.id] = u.enabled ?? true })
         setEnabledMap(map)
     }, [data])
 
-    // ── Handlers ──────────────────────────────────────────────────────────────
     const saveThreshold = () => {
         const val = parseInt(threshold)
         if (isNaN(val) || val < 100) {
@@ -158,15 +149,10 @@ export function SettingsTab({ data = [], loading = false, onRefresh }) {
     }
 
     const toggleMonitor = useCallback(async (url, enabled) => {
-        const toastId = `toggle-${url.id}`   // stable ID — replaces instead of stacking
+        const toastId = `toggle-${url.id}`
         setTogglingId(url.id)
-        setEnabledMap(prev => ({ ...prev, [url.id]: enabled }))   // optimistic
+        setEnabledMap(prev => ({ ...prev, [url.id]: enabled }))
         try {
-            // Only send the fields needed to toggle monitoring on/off.
-            // Do NOT include derived/defaulted config fields (expectedStatus,
-            // maxLatencyMs, timeoutSeconds) — if the API omitted them and
-            // normaliseURL substituted defaults, the PUT would silently overwrite
-            // real DynamoDB values with those defaults.
             const payload = {
                 URLid: url.id,
                 name: url.name,
@@ -179,22 +165,19 @@ export function SettingsTab({ data = [], loading = false, onRefresh }) {
                 throw new Error(`HTTP ${res.status}: ${body}`)
             }
             toast.success(`${url.name} monitoring ${enabled ? "enabled" : "disabled"}`, { id: toastId })
-            // Refresh the monitor tab after a short delay so the url-table
-            // and stats-cards pick up the updated enabled field from the server
             setTimeout(() => onRefresh?.(), 600)
         } catch (err) {
-            setEnabledMap(prev => ({ ...prev, [url.id]: !enabled }))   // revert
+            setEnabledMap(prev => ({ ...prev, [url.id]: !enabled }))
             toast.error(`Failed: ${err.message || "unknown error"}`, { id: toastId })
         } finally {
             setTogglingId(null)
         }
     }, [onRefresh])
 
-    // ─────────────────────────────────────────────────────────────────────────
     return (
         <div className="space-y-5 max-w-3xl">
 
-            {/* ── Alert Thresholds ── */}
+            {}
             <Section
                 title="Alert Thresholds"
                 description="Set when a monitor is treated as slow"
@@ -226,7 +209,7 @@ export function SettingsTab({ data = [], loading = false, onRefresh }) {
                 </div>
             </Section>
 
-            {/* ── Check Interval ── */}
+            {}
             <Section
                 title="Check Interval"
                 description="How often you expect monitors to be checked (informational)"
@@ -251,7 +234,7 @@ export function SettingsTab({ data = [], loading = false, onRefresh }) {
                 </div>
             </Section>
 
-            {/* ── Notifications ── */}
+            {}
             <Section
                 title="Browser Notifications"
                 description="Get alerted when a monitor goes down"
@@ -291,7 +274,7 @@ export function SettingsTab({ data = [], loading = false, onRefresh }) {
                 </div>
             </Section>
 
-            {/* ── Monitor Management ── */}
+            {}
             <Section
                 title="Monitor Management"
                 description="Enable or disable individual monitors"
@@ -324,7 +307,7 @@ export function SettingsTab({ data = [], loading = false, onRefresh }) {
                                         <p className="text-xs text-muted-foreground truncate">{url.url}</p>
                                     </div>
 
-                                    {/* Show "Paused" badge when disabled, status badge when enabled */}
+                                    {}
                                     {isEnabled
                                         ? <StatusBadge status={url.status} />
                                         : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">

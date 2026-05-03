@@ -24,18 +24,14 @@ const DEFAULT_FORM = {
     timeoutSeconds: "5",
 }
 
-/**
- * Generate a clean URLid from a name.
- * Must be safe for use as a DynamoDB partition key.
- */
 function generateURLid(name) {
     const slug = name
         .toLowerCase()
         .trim()
-        .replace(/[^a-z0-9\-_]/g, '-')   // replace special chars with hyphen
-        .replace(/-+/g, '-')               // collapse multiple hyphens
-        .replace(/^-|-$/g, '')             // strip leading/trailing hyphens
-        .slice(0, 60)                      // max 60 chars before timestamp
+        .replace(/[^a-z0-9\-_]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 60)
     return `${slug}-${Date.now()}`
 }
 
@@ -61,7 +57,6 @@ export function AddURLDialog({ onURLAdded }) {
         e.preventDefault()
         setError("")
 
-        // ── Client-side validation ─────────────────────────────────────────────
         if (!formData.name.trim()) {
             setError("Name is required")
             return
@@ -97,20 +92,10 @@ export function AddURLDialog({ onURLAdded }) {
             timeoutSeconds: timeout,
         }
 
-        // ── Optimistic update: close immediately and show the row now ──────────
-        // The parent's onURLAdded adds the row to the table instantly (with
-        // "Unknown" status) before the POST even completes. This makes the UX
-        // feel instant regardless of Lambda / network latency.
-        // It also returns a removeOptimisticRow() function we can call if the
-        // POST fails, so the stale row doesn't orphan in the table.
         handleOpenChange(false)
         const removeOptimisticRow = onURLAdded ? onURLAdded(payload) : null
         toast.success(`"${payload.name}" added — monitoring will start shortly`)
 
-        // ── Background POST ────────────────────────────────────────────────────
-        // Fire-and-forget. The row is already visible so the user isn't blocked.
-        // The hook's background re-fetch (8s later) will replace the optimistic
-        // row with real server data.
         try {
             const response = await apiClient.post('/urls', payload)
             if (!response.ok) {
@@ -119,7 +104,6 @@ export function AddURLDialog({ onURLAdded }) {
             }
         } catch (err) {
             console.error("Error adding URL:", err)
-            // Remove the optimistic row so it doesn't persist as a ghost entry
             if (typeof removeOptimisticRow === 'function') removeOptimisticRow()
             toast.error(
                 `Failed to save "${payload.name}" — it has been removed from the table. ${err.message || ''}`,

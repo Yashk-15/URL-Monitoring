@@ -25,7 +25,6 @@ function VerifyEmailContent() {
         }
     }, [email, router])
 
-    // Resend cooldown timer
     useEffect(() => {
         if (resendCooldown <= 0) return
         const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000)
@@ -65,7 +64,7 @@ function VerifyEmailContent() {
         try {
             await resendSignUpCode({ username: email })
             toast.success("Verification code resent — check your inbox")
-            setResendCooldown(60)   // 60-second cooldown
+            setResendCooldown(60)
             setCode("")
         } catch (err) {
             console.error("Resend error:", err)
@@ -82,7 +81,7 @@ function VerifyEmailContent() {
     return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
             <div className="w-full max-w-md">
-                {/* Header */}
+                {}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-t from-primary/5 to-card border border-border rounded-2xl mb-4 shadow-sm">
                         <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,7 +95,7 @@ function VerifyEmailContent() {
                     </p>
                 </div>
 
-                {/* Card */}
+                {}
                 <div className="bg-gradient-to-t from-primary/5 to-card rounded-2xl shadow-xs p-8 border border-border">
                     {success ? (
                         <div className="text-center py-8">
@@ -155,7 +154,7 @@ function VerifyEmailContent() {
                                 ) : "Verify Email"}
                             </button>
 
-                            {/* Resend */}
+                            {}
                             <div className="text-center text-sm text-muted-foreground">
                                 Didn't receive the code?{" "}
                                 <button
@@ -185,7 +184,6 @@ function VerifyEmailContent() {
     )
 }
 
-// Suspense wrapper is required because useSearchParams() needs it in Next.js
 export default function VerifyEmailPage() {
     return (
         <Suspense fallback={

@@ -13,7 +13,4 @@ export const amplifyConfig = {
     },
 };
 
-// Configure Amplify — ssr:true is omitted because all auth runs in client
-// components; enabling it would cause Amplify to write cookies for server-side
-// session hydration which conflicts with the Next.js App Router.
 Amplify.configure(amplifyConfig);

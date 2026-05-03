@@ -95,14 +95,14 @@ function TimelineGroup({ title, incidents }) {
                 {title}
             </h3>
             <div className="relative">
-                {/* Timeline line */}
+                {}
                 <div className="absolute left-8 top-0 bottom-0 w-px bg-border hidden lg:block" />
 
-                {/* Incidents */}
+                {}
                 <div className="space-y-4">
                     {incidents.map((incident, idx) => (
                         <div key={incident.id || idx} className="relative pl-0 lg:pl-16">
-                            {/* Timeline dot */}
+                            {}
                             <div className="absolute left-6 top-6 size-4 rounded-full bg-background border-2 border-primary hidden lg:block" />
 
                             <IncidentCard incident={incident} />

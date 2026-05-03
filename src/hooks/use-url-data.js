@@ -4,23 +4,12 @@ import { toast } from 'sonner'
 
 /**
  * Shared hook for fetching, refreshing, and optimistically updating URL monitor data.
- *
- * Fix for "Unknown after refresh" bug:
- *
- * Root cause: the 8s smart-merge re-fetch fires before the POST /urls Lambda
- * has finished writing to DynamoDB (cold start = 3-7s). GET /urls returns the
- * list WITHOUT the new item. The merge keeps the optimistic row as "localOnly".
- * Then a manual refresh calls GET /urls which now has the server item but with
- * status "Unknown" (monitor Lambda hasn't run yet), replacing the good
- * ping-patched optimistic row.
- *
- * Solution: two-stage re-fetch strategy
- *   Stage 1 (10s): merge — gives POST Lambda time to finish writing
- *   Stage 2 (75s): merge again — gives monitor Lambda (EventBridge ~1min) time
- *                  to run its first health check and write real status/responseTime
- *
- * localPingResultsRef ensures that if the server still shows "Unknown" at
- * either stage, we keep the real health data from the immediate /api/ping call.
+ * 
+ * Architecture Note:
+ * Uses a two-stage re-fetch strategy to prevent the "Unknown after refresh" bug:
+ *   - Stage 1 (10s): Merges state. Gives the POST Lambda time to finish writing to DynamoDB (bypassing 3-7s cold starts).
+ *   - Stage 2 (75s): Merges state again. Gives the EventBridge-triggered monitor Lambda time to run its first health check (~1 min schedule).
+ * localPingResultsRef ensures that we keep the real health data from the immediate /api/ping call during both stages.
  */
 export function useURLData({ autoRefresh = false } = {}) {
     const [data, setData] = useState([])
@@ -32,8 +21,6 @@ export function useURLData({ autoRefresh = false } = {}) {
     const bgTimer1Ref = useRef(null)
     const bgTimer2Ref = useRef(null)
 
-    // Map of id → local ping result. Survives both re-fetch windows so neither
-    // merge stage overwrites a good "Up/346ms" result with a stale "Unknown".
     const localPingResultsRef = useRef({})
 
     const fetchURLs = useCallback(async (isManual = false) => {
@@ -51,9 +38,6 @@ export function useURLData({ autoRefresh = false } = {}) {
             const rawData = extractArray(result)
             const transformedData = rawData.map(normaliseURL)
 
-            // On every fetch, preserve local ping results for any URL where
-            // the server still says Unknown — the monitor Lambda may not have
-            // run yet but we already have real health data from /api/ping.
             setData(() => {
                 const localPings = localPingResultsRef.current
                 return transformedData.map((serverItem) => {
@@ -61,7 +45,6 @@ export function useURLData({ autoRefresh = false } = {}) {
                     if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Down')) {
                         return { ...serverItem, ...localPing }
                     }
-                    // Server has a definitive status now — drop the local override
                     if (localPing && serverItem.status !== 'Unknown') {
                         delete localPings[serverItem.id]
                     }
@@ -93,15 +76,12 @@ export function useURLData({ autoRefresh = false } = {}) {
     const handleURLAdded = useCallback((newPayload) => {
         if (!newPayload) return
 
-        // Step 1 — optimistic insert with "Checking" status (spinner badge)
         const optimisticRow = normaliseURL({ ...newPayload, status: 'Checking' })
         setData((prev) => [...prev, optimisticRow])
 
-        // Cancel any previous pending background timers
         if (bgTimer1Ref.current) clearTimeout(bgTimer1Ref.current)
         if (bgTimer2Ref.current) clearTimeout(bgTimer2Ref.current)
 
-        // Step 2 — immediate server-side ping via Next.js route
         fetch('/api/ping', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -127,10 +107,8 @@ export function useURLData({ autoRefresh = false } = {}) {
                     uptime: ping.isUp ? '100' : '0',
                 }
 
-                // Store so both re-fetch stages can preserve this result
                 localPingResultsRef.current[optimisticRow.id] = healthPatch
 
-                // Patch the optimistic row immediately
                 setData((prev) =>
                     prev.map((row) =>
                         row.id === optimisticRow.id
@@ -149,7 +127,6 @@ export function useURLData({ autoRefresh = false } = {}) {
                 )
             })
 
-        // Step 3 — background POST to persist in DynamoDB
         apiClient.post('/urls', newPayload)
             .then(async (response) => {
                 if (!response.ok) {
@@ -159,7 +136,6 @@ export function useURLData({ autoRefresh = false } = {}) {
             })
             .catch((err) => {
                 console.error('[handleURLAdded] POST error:', err)
-                // Remove orphan row — save failed, don't leave ghost entries
                 setData((prev) => prev.filter((row) => row.id !== optimisticRow.id))
                 delete localPingResultsRef.current[optimisticRow.id]
                 toast.error(
@@ -168,11 +144,6 @@ export function useURLData({ autoRefresh = false } = {}) {
                 )
             })
 
-        // ── Stage 1 re-fetch: 10s ──────────────────────────────────────────
-        // Gives the POST Lambda enough time to finish writing even with a cold
-        // start (typical cold start: 3-7s). At this point the server item exists
-        // in DynamoDB but the monitor Lambda probably hasn't run yet, so status
-        // will still be "Unknown". localPingResultsRef preserves our ping result.
         bgTimer1Ref.current = setTimeout(async () => {
             try {
                 const res = await apiClient.get('/urls')
@@ -182,13 +153,11 @@ export function useURLData({ autoRefresh = false } = {}) {
                 const localPings = localPingResultsRef.current
 
                 setData((prev) => {
-                    // Items saved locally but not on server yet (POST still in-flight)
                     const localOnly = prev.filter((p) => !serverIds.has(p.id))
 
                     const merged = serverList.map((serverItem) => {
                         const localPing = localPings[serverItem.id]
                         if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Down')) {
-                            // Server hasn't run health check yet — keep our ping data
                             return { ...serverItem, ...localPing }
                         }
                         if (localPing && serverItem.status !== 'Unknown') {
@@ -201,15 +170,10 @@ export function useURLData({ autoRefresh = false } = {}) {
                 })
 
                 setLastUpdated(new Date())
-            } catch { /* ignore */ }
+            } catch {  }
             bgTimer1Ref.current = null
-        }, 10000) // 10s — POST Lambda cold start window
+        }, 10000) 
 
-        // ── Stage 2 re-fetch: 75s ─────────────────────────────────────────
-        // Gives the EventBridge-triggered monitor Lambda time to run its first
-        // health check (~1 min schedule). After this re-fetch, the server record
-        // should have real status/responseTime written by the monitor Lambda, so
-        // we can drop the local ping override and show the server's authoritative data.
         bgTimer2Ref.current = setTimeout(async () => {
             try {
                 const res = await apiClient.get('/urls')
@@ -225,12 +189,9 @@ export function useURLData({ autoRefresh = false } = {}) {
                         const localPing = localPings[serverItem.id]
 
                         if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Down')) {
-                            // Monitor Lambda still hasn't run — keep ping data
                             return { ...serverItem, ...localPing }
                         }
 
-                        // Monitor Lambda has run — server data is authoritative now,
-                        // clean up the local override
                         if (localPing) {
                             delete localPings[serverItem.id]
                         }
@@ -242,9 +203,9 @@ export function useURLData({ autoRefresh = false } = {}) {
                 })
 
                 setLastUpdated(new Date())
-            } catch { /* ignore */ }
+            } catch {  }
             bgTimer2Ref.current = null
-        }, 75000) // 75s — EventBridge monitor Lambda window
+        }, 75000) 
 
     }, [])
 
@@ -256,7 +217,6 @@ export function useURLData({ autoRefresh = false } = {}) {
         return () => clearInterval(interval)
     }, [autoRefresh, fetchURLs])
 
-    // Cleanup all timers on unmount
     useEffect(() => {
         return () => {
             if (bgTimer1Ref.current) clearTimeout(bgTimer1Ref.current)

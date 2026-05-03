@@ -82,13 +82,10 @@ import {
     TableRow,
 } from "@/components/ui/table"
 
-// Per-row context so DragHandle can receive attrs/listeners without
-// the column cell needing to read them from the mutated row.original.
+// Context is used to pass dnd-kit attributes down to the drag handle
+// without mutating the row.original object (which violates React state rules).
 const DragHandleContext = React.createContext(null)
 
-// ─── Drag Handle ──────────────────────────────────────────────────────────────
-// Reads attributes & listeners from the nearest DragHandleContext provided
-// by DraggableRow — no state mutation required.
 function DragHandle() {
     const ctx = React.useContext(DragHandleContext)
     return (
@@ -105,8 +102,6 @@ function DragHandle() {
     )
 }
 
-// In url-table.jsx, replace the StatusBadge function with this version
-// to handle the new "Checking" status that use-url-data now sets on optimistic rows.
 
 function StatusBadge({ status }) {
     if (status === "Up") {
@@ -133,7 +128,6 @@ function StatusBadge({ status }) {
             </Badge>
         )
     }
-    // NEW: "Checking" status for freshly-added optimistic rows
     if (status === "Checking") {
         return (
             <Badge variant="secondary" className="px-1.5 gap-1 animate-pulse">
@@ -150,28 +144,12 @@ function StatusBadge({ status }) {
     )
 }
 
-// Also update the status column cell in buildColumns to handle "Checking":
-//
-//   cell: ({ row }) => {
-//       if (row.original.enabled === false) {
-//           return (
-//               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-//                   Paused
-//               </span>
-//           )
-//       }
-//       return <StatusBadge status={row.original.status} />
-//   },
-//
-// No change needed there — StatusBadge now handles "Checking" itself.
 
 function buildColumns(onRefresh) {
     return [
         {
             id: "drag",
             header: () => null,
-            // DragHandle reads attributes/listeners from DragHandleContext
-            // provided by DraggableRow — no state mutation on row.original.
             cell: () => <DragHandle />,
         },
         {
@@ -293,7 +271,6 @@ function buildColumns(onRefresh) {
     ]
 }
 
-// ─── Delete Confirmation Dialog ────────────────────────────────────────────────
 function DeleteConfirmDialog({ open, onOpenChange, urlName, onConfirm, isDeleting }) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -337,7 +314,6 @@ function RowActions({ row, onRefresh }) {
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
 
     const handleViewDetails = () => {
-        // Navigate to the URLs list; a dedicated detail page can be added later
         router.push(`/dashboard/urls?highlight=${encodeURIComponent(url.id)}`)
     }
 
@@ -430,10 +406,6 @@ function RowActions({ row, onRefresh }) {
     )
 }
 
-// ─── Draggable Row ─────────────────────────────────────────────────────────────
-// Single useSortable registration per row. Provides attributes & listeners via
-// DragHandleContext so DragHandle never needs to call useSortable itself and
-// we never mutate objects that live inside React state.
 function DraggableRow({ row }) {
     const { transform, transition, setNodeRef, isDragging, attributes, listeners } = useSortable({
         id: row.original.id,
@@ -478,7 +450,6 @@ export function DataTable({ data: initialData, onRefresh }) {
         useSensor(KeyboardSensor, {})
     )
 
-    // Sync with parent data changes
     React.useEffect(() => {
         if (initialData) setData(initialData)
     }, [initialData])
@@ -525,7 +496,7 @@ export function DataTable({ data: initialData, onRefresh }) {
 
     return (
         <div className="w-full flex-col justify-start gap-6">
-            {/* Toolbar */}
+            {}
             <div className="flex items-center justify-between px-4 lg:px-6 mb-4">
                 <div className="text-sm text-muted-foreground">
                     {selectedCount > 0
@@ -564,7 +535,7 @@ export function DataTable({ data: initialData, onRefresh }) {
                 </DropdownMenu>
             </div>
 
-            {/* Table */}
+            {}
             <div className="px-4 lg:px-6">
                 <div className="overflow-hidden rounded-lg border">
                     <DndContext
@@ -614,7 +585,7 @@ export function DataTable({ data: initialData, onRefresh }) {
                 </div>
             </div>
 
-            {/* Pagination */}
+            {}
             <div className="flex items-center justify-between px-4 lg:px-6 mt-4">
                 <div className="hidden lg:flex text-muted-foreground flex-1 text-sm">
                     {selectedCount} of {totalCount} row(s) selected.

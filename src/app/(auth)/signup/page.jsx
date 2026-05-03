@@ -20,7 +20,6 @@ export default function SignupPage() {
         e.preventDefault()
         setError("")
 
-        // Validation
         if (password !== confirmPassword) {
             setError("Passwords do not match")
             return
@@ -42,7 +41,6 @@ export default function SignupPage() {
             const result = await signup(name, email, password)
             if (result.success) {
                 if (result.requiresVerification) {
-                    // Redirect to verification page
                     router.push(`/verify-email?email=${encodeURIComponent(email)}`)
                 } else {
                     router.push("/dashboard")
@@ -60,7 +58,7 @@ export default function SignupPage() {
     return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
             <div className="w-full max-w-md">
-                {/* Logo/Header */}
+                {}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-t from-primary/5 to-card border border-border rounded-2xl mb-4 shadow-sm">
                         <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,7 +69,7 @@ export default function SignupPage() {
                     <p className="text-muted-foreground mt-2">Start monitoring your URLs today</p>
                 </div>
 
-                {/* Signup Form */}
+                {}
                 <div className="bg-gradient-to-t from-primary/5 to-card rounded-2xl shadow-xs p-8 border border-border">
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {error && (

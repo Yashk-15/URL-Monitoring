@@ -1,12 +1,3 @@
-/**
- * POST /api/ping
- *
- * Server-side URL health check proxy. The browser can't fetch arbitrary
- * third-party URLs directly (CORS), but a Next.js API route can.
- *
- * Body: { url: string, timeoutSeconds?: number }
- * Response: { isUp, statusCode, latencyMs, errorMsg }
- */
 export async function POST(request) {
     let body
     try {
@@ -21,7 +12,6 @@ export async function POST(request) {
         return Response.json({ error: 'url is required' }, { status: 400 })
     }
 
-    // Basic sanity check — must be http/https
     try {
         const parsed = new URL(url)
         if (!['http:', 'https:'].includes(parsed.protocol)) {
@@ -39,15 +29,12 @@ export async function POST(request) {
         const res = await fetch(url, {
             method: 'GET',
             signal: controller.signal,
-            // Don't follow too many redirects; limit to 5
             redirect: 'follow',
         })
         clearTimeout(timeout)
         const latencyMs = Date.now() - start
 
         return Response.json({
-            // res.ok is true only for 200–299. A URL that redirects (302) to a
-            // login page (200) will now correctly be reported as Down, not Up.
             isUp: res.ok,
             statusCode: res.status,
             latencyMs,

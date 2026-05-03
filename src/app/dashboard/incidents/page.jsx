@@ -21,9 +21,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { apiClient, extractArray, normaliseLog, normaliseURL } from "@/lib/api-client"
 
-/**
- * Build incident records from log history (historical failures).
- */
 function deriveIncidents(logs, urlMap) {
     const failures = logs.filter((log) => {
         return (
@@ -40,11 +37,6 @@ function deriveIncidents(logs, urlMap) {
         const urlName = urlInfo.name || log.urlId || "Unknown URL"
         const urlHref = urlInfo.url || ""
 
-        // Severity: 5xx errors or definitively down → critical.
-        // 4xx client errors or slow responses → warning.
-        // We don't rely on !log.isUp alone because normaliseLog defaults isUp to
-        // true when the field is absent, which would cause unknown records to never
-        // be classified as critical.
         let severity = 'warning'
         if (!log.isUp || (log.statusCode && log.statusCode >= 500)) severity = 'critical'
         else if (log.isSlow || (log.statusCode && log.statusCode >= 400)) severity = 'warning'
@@ -72,9 +64,6 @@ function deriveIncidents(logs, urlMap) {
     }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
 }
 
-/**
- * Derive live incidents from current URL states — same logic as the Incidents tab.
- */
 function deriveLiveIncidents(urls) {
     return urls
         .filter(u => u.status === "Down" || u.status === "Warning")
@@ -154,7 +143,6 @@ function IncidentsContent() {
                 if (key) urlMap[key] = { name: u.name, url: u.url }
             }
 
-            // Live state — same filter as the Incidents tab
             setLiveIncidents(deriveLiveIncidents(urls))
 
             if (urls.length === 0) {
@@ -229,7 +217,7 @@ function IncidentsContent() {
                     <div className="@container/main flex flex-1 flex-col gap-2">
                         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
 
-                            {/* Header */}
+                            {}
                             <div className="px-4 lg:px-6">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
@@ -247,7 +235,7 @@ function IncidentsContent() {
                                 </div>
                             </div>
 
-                            {/* Stats */}
+                            {}
                             <div className="px-4 lg:px-6">
                                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                                     <StatCard value={loading ? "..." : criticalCount} label="Critical Failures" color="text-red-600" />
@@ -257,7 +245,7 @@ function IncidentsContent() {
                                 </div>
                             </div>
 
-                            {/* Live incidents — synced with Incidents tab */}
+                            {}
                             {!loading && liveIncidents.length > 0 && (
                                 <div className="px-4 lg:px-6 space-y-2">
                                     <div className="flex items-center gap-2">
@@ -271,7 +259,7 @@ function IncidentsContent() {
                                 </div>
                             )}
 
-                            {/* Filters */}
+                            {}
                             <div className="px-4 lg:px-6">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-4 flex-wrap">
@@ -312,7 +300,7 @@ function IncidentsContent() {
                                 </div>
                             </div>
 
-                            {/* Timeline */}
+                            {}
                             <div className="px-4 lg:px-6">
                                 {loading ? (
                                     <div className="text-center py-12">

@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { signUp, signIn, signOut, getCurrentUser, confirmSignUp, fetchUserAttributes } from "aws-amplify/auth"
-import { clearTokenCache } from "@/lib/api-client"   // ← new import
+import { clearTokenCache } from "@/lib/api-client"
 import "../lib/amplify-config"
 
 const AuthContext = createContext({})
@@ -71,7 +71,7 @@ export function AuthProvider({ children }) {
 
     const logout = async () => {
         try {
-            clearTokenCache()   // ← wipe cached Cognito token immediately
+            clearTokenCache()
             await signOut()
             setUser(null)
             router.push("/login")

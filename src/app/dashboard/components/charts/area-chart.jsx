@@ -34,35 +34,21 @@ import {
 } from "@/components/ui/toggle-group"
 import { apiClient, extractArray, normaliseLog } from "@/lib/api-client"
 
-const CHART_COLOR = "#6366f1" // indigo
+const CHART_COLOR = "#6366f1"
 
-// ─── Timestamp parsing ────────────────────────────────────────────────────────
-/**
- * Robustly parse a timestamp that may be:
- *  - ISO string:          "2026-03-14T12:34:56.789Z"
- *  - Unix ms (number):    1710418496789
- *  - Unix ms (string):    "1710418496789"
- *  - Unix seconds:        1710418496  / "1710418496"
- * Returns a Date (or null if unparseable).
- */
 function parseTimestamp(ts) {
     if (!ts) return null
-    // Already a number
     if (typeof ts === 'number') {
-        // Heuristic: Unix seconds are < 2e10, ms are ≥ 1e12
         return new Date(ts < 1e10 ? ts * 1000 : ts)
     }
-    // String that looks like a pure integer → treat as Unix
     if (/^\d+$/.test(String(ts))) {
         const n = Number(ts)
         return new Date(n < 1e10 ? n * 1000 : n)
     }
-    // ISO string or any other date string
     const d = new Date(ts)
     return isNaN(d.getTime()) ? null : d
 }
 
-// ─── Time-range helpers ───────────────────────────────────────────────────────
 function daysForRange(range) {
     return range === "7d" ? 7 : range === "30d" ? 30 : 90
 }
@@ -70,16 +56,13 @@ function cutoffForRange(range) {
     const now = new Date()
     return new Date(now.getTime() - daysForRange(range) * 24 * 60 * 60 * 1000)
 }
-// ISO start date to pass as a query param so the Lambda filters server-side
 function startDateParam(range) {
     return cutoffForRange(range).toISOString()
 }
 
-// ─── Bucket logs into chart slots ────────────────────────────────────────────
 function bucketLogs(logs, timeRange) {
     const now = new Date()
     const days = daysForRange(timeRange)
-    // 2-hour slots for 7d, 6-hour slots for 30d, daily for 90d
     const slotMs =
         timeRange === "7d"
             ? 2 * 60 * 60 * 1000
@@ -88,13 +71,12 @@ function bucketLogs(logs, timeRange) {
                 : 24 * 60 * 60 * 1000
     const totalSlots =
         timeRange === "7d"
-            ? days * 12        // 84 two-hour slots
+            ? days * 12
             : timeRange === "30d"
-                ? days * 4     // 120 six-hour slots
-                : days         // 90 daily slots
+                ? days * 4
+                : days
     const cutoff = cutoffForRange(timeRange)
 
-    // Filter to logs within the selected window, skipping invalid timestamps
     const filtered = []
     for (const l of logs) {
         const ts = parseTimestamp(l.timestamp)
@@ -131,7 +113,6 @@ function bucketLogs(logs, timeRange) {
     return result
 }
 
-// ─── X-axis tick formatting ───────────────────────────────────────────────────
 function formatTick(isoStr, timeRange) {
     const d = new Date(isoStr)
     if (timeRange === "7d") {
@@ -144,7 +125,6 @@ function formatTick(isoStr, timeRange) {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
-// ─── Tooltip ─────────────────────────────────────────────────────────────────
 function CustomTooltip({ active, payload, label, timeRange }) {
     if (!active || !payload?.length) return null
     const d = new Date(label)
@@ -187,7 +167,6 @@ function CustomTooltip({ active, payload, label, timeRange }) {
     )
 }
 
-// ─── Empty / error states ─────────────────────────────────────────────────────
 function EmptyState({ message, sub, icon }) {
     return (
         <div className="h-[280px] flex flex-col items-center justify-center gap-3 text-muted-foreground select-none">
@@ -208,7 +187,6 @@ function EmptyState({ message, sub, icon }) {
     )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 export function ChartAreaInteractive({ data: urlData = [] }) {
     const isMobile = useIsMobile()
     const [timeRange, setTimeRange] = React.useState("7d")
@@ -221,7 +199,6 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
         if (isMobile) setTimeRange("7d")
     }, [isMobile])
 
-    // Stable key of URL IDs — changes when the URL list changes
     const urlIdString = React.useMemo(
         () =>
             (urlData || [])
@@ -232,7 +209,6 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
         [urlData]
     )
 
-    // ── Fetch logs whenever URL list OR time range changes ──────────────────
     React.useEffect(() => {
         if (!urlIdString) return
 
@@ -244,12 +220,10 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
 
             const urlsToFetch = (urlData || [])
                 .filter((u) => u.id || u.URLid)
-                .slice(0, 5) // max 5 URLs for chart performance
+                .slice(0, 5)
 
-            // Build query: pass startDate so Lambda can filter server-side,
-            // and a high limit so we get the full historical window
             const startDate = startDateParam(timeRange)
-            const limit = 500 // request up to 500 log entries per URL
+            const limit = 500
 
             try {
                 let firstError = null
@@ -257,7 +231,6 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
                     urlsToFetch.map(async (url) => {
                         const urlId = url.id || url.URLid
                         try {
-                            // Pass both startDate and limit; Lambda will use what it supports
                             const qs = new URLSearchParams({
                                 urlId: urlId,
                                 startDate,
@@ -271,7 +244,6 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
                             const result = await response.json()
                             return extractArray(result).map((l) => ({
                                 ...normaliseLog(l),
-                                // Also preserve the raw Timestamp so parseTimestamp can work
                                 timestamp: l.Timestamp || l.timestamp || normaliseLog(l).timestamp,
                                 urlId,
                                 urlName: url.name || url.url || urlId,
@@ -295,11 +267,9 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
 
         fetchLogsForURLs()
         return () => { cancelled = true }
-        // Re-fetch whenever the URL set OR the selected time range changes
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [urlIdString, timeRange])
 
-    // ── Bucket into chart slots ─────────────────────────────────────────────
     const chartData = React.useMemo(() => {
         if (!logs.length) return []
         return bucketLogs(logs, timeRange)
@@ -307,7 +277,6 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
 
     const hasData = chartData.some((d) => d.avg !== null)
 
-    // Count slots that actually have data (for subtitle)
     const populatedSlots = chartData.filter((d) => d.avg !== null).length
 
     const avgAll = React.useMemo(() => {
@@ -315,13 +284,11 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
         return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : null
     }, [chartData])
 
-    // Y-axis domain: 0 to 20% above peak, with a sensible minimum ceiling
     const yMax = React.useMemo(() => {
         const peak = Math.max(0, ...chartData.map((d) => d.avg ?? 0))
         return peak ? Math.ceil(peak * 1.2) : 500
     }, [chartData])
 
-    // Performance colour band thresholds on Y-axis
     const perfBand = avgAll !== null
         ? avgAll < 300 ? "text-green-600 dark:text-green-400"
             : avgAll < 700 ? "text-yellow-600 dark:text-yellow-400"
@@ -433,7 +400,7 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
                                 cursor={{ stroke: "var(--border)", strokeWidth: 1, strokeDasharray: "4 4" }}
                             />
 
-                            {/* Warning threshold at 1000ms */}
+                            {}
                             {yMax > 800 && (
                                 <ReferenceLine
                                     y={1000}
@@ -453,7 +420,6 @@ export function ChartAreaInteractive({ data: urlData = [] }) {
                                 connectNulls={false}
                                 dot={(props) => {
                                     if (!props.payload?.count) return null
-                                    // Colour-code dots by response time
                                     const ms = props.payload.avg
                                     const fill = ms < 300 ? "#22c55e" : ms < 700 ? "#f59e0b" : "#ef4444"
                                     return (
