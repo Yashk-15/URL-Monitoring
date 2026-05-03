@@ -38,18 +38,23 @@ export function useURLData({ autoRefresh = false } = {}) {
             const rawData = extractArray(result)
             const transformedData = rawData.map(normaliseURL)
 
-            setData(() => {
+            setData((prev) => {
                 const localPings = localPingResultsRef.current
-                return transformedData.map((serverItem) => {
-                    const localPing = localPings[serverItem.id]
-                    if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Down')) {
+                const serverUrls = new Set(transformedData.map((u) => u.url))
+                const localOnly = prev.filter((p) => p.isLocalOnly && !serverUrls.has(p.url))
+
+                const merged = transformedData.map((serverItem) => {
+                    const localPing = localPings[serverItem.url]
+                    if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Checking' || serverItem.status === 'Down')) {
                         return { ...serverItem, ...localPing }
                     }
-                    if (localPing && serverItem.status !== 'Unknown') {
-                        delete localPings[serverItem.id]
+                    if (localPing && serverItem.status !== 'Unknown' && serverItem.status !== 'Checking') {
+                        delete localPings[serverItem.url]
                     }
                     return serverItem
                 })
+
+                return [...merged, ...localOnly]
             })
 
             setLastUpdated(new Date())
@@ -77,6 +82,7 @@ export function useURLData({ autoRefresh = false } = {}) {
         if (!newPayload) return
 
         const optimisticRow = normaliseURL({ ...newPayload, status: 'Checking' })
+        optimisticRow.isLocalOnly = true
         setData((prev) => [...prev, optimisticRow])
 
         if (bgTimer1Ref.current) clearTimeout(bgTimer1Ref.current)
@@ -107,7 +113,7 @@ export function useURLData({ autoRefresh = false } = {}) {
                     uptime: ping.isUp ? '100' : '0',
                 }
 
-                localPingResultsRef.current[optimisticRow.id] = healthPatch
+                localPingResultsRef.current[optimisticRow.url] = healthPatch
 
                 setData((prev) =>
                     prev.map((row) =>
@@ -137,7 +143,7 @@ export function useURLData({ autoRefresh = false } = {}) {
             .catch((err) => {
                 console.error('[handleURLAdded] POST error:', err)
                 setData((prev) => prev.filter((row) => row.id !== optimisticRow.id))
-                delete localPingResultsRef.current[optimisticRow.id]
+                delete localPingResultsRef.current[optimisticRow.url]
                 toast.error(
                     `Failed to save "${newPayload.name}" — ${err.message || 'network error'}`,
                     { duration: 8000 }
@@ -149,19 +155,19 @@ export function useURLData({ autoRefresh = false } = {}) {
                 const res = await apiClient.get('/urls')
                 if (!res.ok) return
                 const serverList = extractArray(await res.json()).map(normaliseURL)
-                const serverIds = new Set(serverList.map((u) => u.id))
+                const serverUrls = new Set(serverList.map((u) => u.url))
                 const localPings = localPingResultsRef.current
 
                 setData((prev) => {
-                    const localOnly = prev.filter((p) => !serverIds.has(p.id))
+                    const localOnly = prev.filter((p) => p.isLocalOnly && !serverUrls.has(p.url))
 
                     const merged = serverList.map((serverItem) => {
-                        const localPing = localPings[serverItem.id]
-                        if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Down')) {
+                        const localPing = localPings[serverItem.url]
+                        if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Checking' || serverItem.status === 'Down')) {
                             return { ...serverItem, ...localPing }
                         }
-                        if (localPing && serverItem.status !== 'Unknown') {
-                            delete localPings[serverItem.id]
+                        if (localPing && serverItem.status !== 'Unknown' && serverItem.status !== 'Checking') {
+                            delete localPings[serverItem.url]
                         }
                         return serverItem
                     })
@@ -179,21 +185,21 @@ export function useURLData({ autoRefresh = false } = {}) {
                 const res = await apiClient.get('/urls')
                 if (!res.ok) return
                 const serverList = extractArray(await res.json()).map(normaliseURL)
-                const serverIds = new Set(serverList.map((u) => u.id))
+                const serverUrls = new Set(serverList.map((u) => u.url))
                 const localPings = localPingResultsRef.current
 
                 setData((prev) => {
-                    const localOnly = prev.filter((p) => !serverIds.has(p.id))
+                    const localOnly = prev.filter((p) => p.isLocalOnly && !serverUrls.has(p.url))
 
                     const merged = serverList.map((serverItem) => {
-                        const localPing = localPings[serverItem.id]
+                        const localPing = localPings[serverItem.url]
 
-                        if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Down')) {
+                        if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Checking' || serverItem.status === 'Down')) {
                             return { ...serverItem, ...localPing }
                         }
 
-                        if (localPing) {
-                            delete localPings[serverItem.id]
+                        if (localPing && serverItem.status !== 'Unknown' && serverItem.status !== 'Checking') {
+                            delete localPings[serverItem.url]
                         }
 
                         return serverItem
