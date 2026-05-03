@@ -3,8 +3,8 @@
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { signUp, signIn, signOut, getCurrentUser, confirmSignUp, fetchUserAttributes } from "aws-amplify/auth"
+import { clearTokenCache } from "@/lib/api-client"   // ← new import
 import "../lib/amplify-config"
-import { clearTokenCache } from "../lib/api-client"
 
 const AuthContext = createContext({})
 
@@ -13,31 +13,17 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true)
     const router = useRouter()
 
-    // Check for existing session on mount
-    useEffect(() => {
-        checkUser()
-    }, [])
+    useEffect(() => { checkUser() }, [])
 
     const checkUser = async () => {
         try {
             const currentUser = await getCurrentUser()
-            // Fetch real user attributes (name, email) set during sign-up
             let attrs = {}
-            try {
-                attrs = await fetchUserAttributes()
-            } catch {
-                // fetchUserAttributes can fail in some edge cases — fall back gracefully
-            }
+            try { attrs = await fetchUserAttributes() } catch { }
             const email = attrs.email || currentUser.signInDetails?.loginId || ''
-            // Use the 'name' attribute if set, otherwise derive from email
             const name = attrs.name || email.split('@')[0] || 'User'
-
-            setUser({
-                id: currentUser.userId,
-                email,
-                name,
-            })
-        } catch (error) {
+            setUser({ id: currentUser.userId, email, name })
+        } catch {
             setUser(null)
         } finally {
             setLoading(false)
@@ -46,82 +32,46 @@ export function AuthProvider({ children }) {
 
     const login = async (email, password) => {
         try {
-            const { isSignedIn } = await signIn({
-                username: email,
-                password: password,
-            })
-
+            const { isSignedIn } = await signIn({ username: email, password })
             if (isSignedIn) {
                 await checkUser()
                 return { success: true }
             }
-
             return { success: false, error: "Login failed" }
         } catch (error) {
-            console.error("Login error:", error)
-            return {
-                success: false,
-                error: error.message || "Invalid email or password"
-            }
+            return { success: false, error: error.message || "Invalid email or password" }
         }
     }
 
     const signup = async (name, email, password) => {
         try {
-            const { isSignUpComplete, userId, nextStep } = await signUp({
+            const { isSignUpComplete, nextStep } = await signUp({
                 username: email,
-                password: password,
-                options: {
-                    userAttributes: {
-                        email: email,
-                        name: name,
-                    },
-                },
+                password,
+                options: { userAttributes: { email, name } },
             })
-
             if (nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
-                return {
-                    success: true,
-                    requiresVerification: true,
-                    message: "Please check your email for verification code"
-                }
+                return { success: true, requiresVerification: true }
             }
-
-            if (isSignUpComplete) {
-                return { success: true }
-            }
-
+            if (isSignUpComplete) return { success: true }
             return { success: false, error: "Signup failed" }
         } catch (error) {
-            console.error("Signup error:", error)
-            return {
-                success: false,
-                error: error.message || "Signup failed"
-            }
+            return { success: false, error: error.message || "Signup failed" }
         }
     }
 
     const confirmSignup = async (email, code) => {
         try {
-            await confirmSignUp({
-                username: email,
-                confirmationCode: code,
-            })
+            await confirmSignUp({ username: email, confirmationCode: code })
             return { success: true }
         } catch (error) {
-            console.error("Confirmation error:", error)
-            return {
-                success: false,
-                error: error.message || "Verification failed"
-            }
+            return { success: false, error: error.message || "Verification failed" }
         }
     }
 
     const logout = async () => {
         try {
-            // Wipe the cached Cognito token immediately so a subsequent login
-            // on the same tab cannot reuse this user's token.
-            clearTokenCache()
+            clearTokenCache()   // ← wipe cached Cognito token immediately
             await signOut()
             setUser(null)
             router.push("/login")
@@ -130,16 +80,8 @@ export function AuthProvider({ children }) {
         }
     }
 
-
     return (
-        <AuthContext.Provider value={{
-            user,
-            loading,
-            login,
-            signup,
-            confirmSignup,
-            logout,
-        }}>
+        <AuthContext.Provider value={{ user, loading, login, signup, confirmSignup, logout }}>
             {children}
         </AuthContext.Provider>
     )
@@ -147,8 +89,6 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
     const context = useContext(AuthContext)
-    if (!context) {
-        throw new Error("useAuth must be used within an AuthProvider")
-    }
+    if (!context) throw new Error("useAuth must be used within an AuthProvider")
     return context
 }

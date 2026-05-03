@@ -105,6 +105,9 @@ function DragHandle() {
     )
 }
 
+// In url-table.jsx, replace the StatusBadge function with this version
+// to handle the new "Checking" status that use-url-data now sets on optimistic rows.
+
 function StatusBadge({ status }) {
     if (status === "Up") {
         return (
@@ -130,6 +133,15 @@ function StatusBadge({ status }) {
             </Badge>
         )
     }
+    // NEW: "Checking" status for freshly-added optimistic rows
+    if (status === "Checking") {
+        return (
+            <Badge variant="secondary" className="px-1.5 gap-1 animate-pulse">
+                <IconLoader className="size-3 animate-spin" />
+                Checking…
+            </Badge>
+        )
+    }
     return (
         <Badge variant="secondary" className="px-1.5 gap-1">
             <IconLoader className="size-3 animate-spin" />
@@ -137,6 +149,21 @@ function StatusBadge({ status }) {
         </Badge>
     )
 }
+
+// Also update the status column cell in buildColumns to handle "Checking":
+//
+//   cell: ({ row }) => {
+//       if (row.original.enabled === false) {
+//           return (
+//               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+//                   Paused
+//               </span>
+//           )
+//       }
+//       return <StatusBadge status={row.original.status} />
+//   },
+//
+// No change needed there — StatusBadge now handles "Checking" itself.
 
 function buildColumns(onRefresh) {
     return [

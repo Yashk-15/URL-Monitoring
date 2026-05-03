@@ -4,10 +4,10 @@ import { toast } from 'sonner'
 
 /**
  * Shared hook for fetching, refreshing, and optimistically updating URL monitor data.
- * Used by both /dashboard and /dashboard/urls to avoid code duplication.
  *
- * @param {Object} options
- * @param {boolean} options.autoRefresh - Whether to automatically refresh every 30s (default: false)
+ * Key fix: when a URL is newly added, we track its local ping result in a ref
+ * so the smart-merge re-fetch never overwrites a good "Up" result with a stale
+ * "Down" or "Unknown" that DynamoDB hasn't caught up with yet.
  */
 export function useURLData({ autoRefresh = false } = {}) {
     const [data, setData] = useState([])
@@ -16,10 +16,12 @@ export function useURLData({ autoRefresh = false } = {}) {
     const [lastUpdated, setLastUpdated] = useState(null)
     const [isRefreshing, setIsRefreshing] = useState(false)
 
-    // Ref to track pending background timers so we can cancel on unmount
     const bgTimerRef = useRef(null)
-    // Ref to guard against setState calls after the component unmounts
-    const isMountedRef = useRef(true)
+
+    // Map of id → local ping result. Survives the 8s re-fetch window so the
+    // smart merge can preserve real health data even when the server still
+    // says "Unknown" or "Down".
+    const localPingResultsRef = useRef({})
 
     const fetchURLs = useCallback(async (isManual = false) => {
         if (isManual) setIsRefreshing(true)
@@ -36,7 +38,27 @@ export function useURLData({ autoRefresh = false } = {}) {
             const rawData = extractArray(result)
             const transformedData = rawData.map(normaliseURL)
 
-            setData(transformedData)
+            // On every fetch, if we have a locally-pinged result for a URL and
+            // the server still reports Unknown/Down, keep our local data so the
+            // row never flickers back to a bad state.
+            setData((prev) => {
+                const localPings = localPingResultsRef.current
+                return transformedData.map((serverItem) => {
+                    const localPing = localPings[serverItem.id]
+                    if (
+                        localPing &&
+                        (serverItem.status === 'Unknown' || serverItem.status === 'Down')
+                    ) {
+                        return { ...serverItem, ...localPing }
+                    }
+                    // Server has a real status now — we can drop the local override
+                    if (localPing && serverItem.status !== 'Unknown') {
+                        delete localPings[serverItem.id]
+                    }
+                    return serverItem
+                })
+            })
+
             setLastUpdated(new Date())
 
             if (isManual) {
@@ -55,7 +77,6 @@ export function useURLData({ autoRefresh = false } = {}) {
                 toast.error('Failed to refresh data')
             }
         } finally {
-            // Always reset both flags so we never get stuck in loading state
             setLoading(false)
             setIsRefreshing(false)
         }
@@ -63,32 +84,28 @@ export function useURLData({ autoRefresh = false } = {}) {
 
     /**
      * Optimistic insert + immediate ping:
-     *  1. Add row to state instantly with "Unknown" status
-     *  2. Fire a server-side ping (/api/ping) — usually responds in ~1s
-     *  3. Patch the row with real health metrics when ping returns
-     *  4. After 8s, do a smart-merge re-fetch to sync with DynamoDB
      *
-     * Why 8s? Lambda cold-start can take 3–7s. We must wait until the
-     * background POST has completed before fetching, otherwise GET /urls
-     * returns the old list and wipes the optimistic row from state.
-     *
-     * Smart-merge rules:
-     *  - If a URL is in local state but NOT on the server yet → keep it (still saving)
-     *  - If a URL is on the server with "Unknown" health but we have real
-     *    data locally (from the ping) → preserve local health data
-     *  - Otherwise use the server record
+     * Fix summary vs original:
+     *  1. Row starts as "Checking" (not "Unknown") so the UI shows a spinner
+     *     instead of a misleading blank/Down badge.
+     *  2. Ping result is stored in localPingResultsRef so every subsequent
+     *     fetchURLs call (manual refresh, auto-refresh, the 8s smart-merge)
+     *     preserves the real health data instead of overwriting with stale DDB.
+     *  3. Error path removes the orphan row from state so a failed POST doesn't
+     *     leave a ghost entry that never clears.
+     *  4. Smart-merge now checks localPingResultsRef for ALL ids, not just
+     *     the one just added, so rapid back-to-back adds all survive the merge.
      */
     const handleURLAdded = useCallback((newPayload) => {
         if (!newPayload) return
 
-        // Step 1 — optimistic insert
-        const optimisticRow = normaliseURL({ ...newPayload, status: 'Unknown' })
+        // Step 1 — optimistic insert with "Checking" status (shows spinner badge)
+        const optimisticRow = normaliseURL({ ...newPayload, status: 'Checking' })
         setData((prev) => [...prev, optimisticRow])
 
-        // Cancel any previous pending background timers
         if (bgTimerRef.current) clearTimeout(bgTimerRef.current)
 
-        // Step 2 — immediate ping via Next.js server-side route (bypasses CORS)
+        // Step 2 — immediate server-side ping
         fetch('/api/ping', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -99,106 +116,121 @@ export function useURLData({ autoRefresh = false } = {}) {
         })
             .then((r) => r.json())
             .then((ping) => {
-                // Step 3 — patch the row with real metrics
                 const status = ping.isUp
                     ? (ping.latencyMs > (newPayload.maxLatencyMs || 3000) ? 'Warning' : 'Up')
                     : 'Down'
 
+                // Build the full local health patch
+                const healthPatch = {
+                    status,
+                    responseTime: String(ping.latencyMs ?? 0),
+                    statusCode: ping.statusCode,
+                    errorMsg: ping.errorMsg,
+                    isUp: ping.isUp,
+                    isSlow: status === 'Warning',
+                    lastCheck: new Date().toLocaleString(),
+                    uptime: ping.isUp ? '100' : '0',
+                }
+
+                // Store in ref so subsequent fetches can preserve it
+                localPingResultsRef.current[optimisticRow.id] = healthPatch
+
+                // Step 3 — patch the row immediately in state
                 setData((prev) =>
                     prev.map((row) =>
                         row.id === optimisticRow.id
-                            ? {
-                                ...row,
-                                status,
-                                responseTime: String(ping.latencyMs ?? 0),
-                                statusCode: ping.statusCode,
-                                errorMsg: ping.errorMsg,
-                                isUp: ping.isUp,
-                                isSlow: status === 'Warning',
-                                lastCheck: new Date().toLocaleString(),
-                                uptime: ping.isUp ? '100' : '0',
-                            }
+                            ? { ...row, ...healthPatch }
                             : row
                     )
                 )
             })
             .catch(() => {
-                // Ping failed — leave as Unknown; re-fetch below will sort it
+                // Ping failed — mark as Unknown so at least the badge is honest
+                setData((prev) =>
+                    prev.map((row) =>
+                        row.id === optimisticRow.id
+                            ? { ...row, status: 'Unknown' }
+                            : row
+                    )
+                )
             })
 
-        // Step 4 — smart-merge re-fetch after 8s (gives time for the background POST +
-        // Lambda cold-start to complete before we ask the server for the list)
+        // Step 4 — background POST to persist in DynamoDB
+        apiClient.post('/urls', newPayload).then(async (response) => {
+            if (!response.ok) {
+                const body = await response.text().catch(() => '')
+                console.error(`[handleURLAdded] POST failed ${response.status}: ${body}`)
+
+                // Remove the orphan row — save failed, don't leave ghost entries
+                setData((prev) => prev.filter((row) => row.id !== optimisticRow.id))
+                delete localPingResultsRef.current[optimisticRow.id]
+
+                toast.error(
+                    `Failed to save "${newPayload.name}" — it was not persisted. ${body}`,
+                    { duration: 8000 }
+                )
+            }
+        }).catch((err) => {
+            console.error('[handleURLAdded] POST error:', err)
+            setData((prev) => prev.filter((row) => row.id !== optimisticRow.id))
+            delete localPingResultsRef.current[optimisticRow.id]
+            toast.error(
+                `Failed to save "${newPayload.name}" — ${err.message || 'network error'}`,
+                { duration: 8000 }
+            )
+        })
+
+        // Step 5 — smart-merge re-fetch after 8s
+        // Now uses localPingResultsRef for ALL locally-pinged URLs, not just
+        // the one we just added.
         bgTimerRef.current = setTimeout(async () => {
-            // Guard: don't call setData if the component has already unmounted
-            // (e.g. user navigated away immediately after adding a URL).
-            if (!isMountedRef.current) return
             try {
                 const res = await apiClient.get('/urls')
                 if (!res.ok) return
                 const serverList = extractArray(await res.json()).map(normaliseURL)
                 const serverIds = new Set(serverList.map((u) => u.id))
+                const localPings = localPingResultsRef.current
 
-                if (!isMountedRef.current) return
                 setData((prev) => {
-                    // Items in local state that aren't on the server yet (POST still in-flight
-                    // or just completed but not yet returned) — keep them
                     const localOnly = prev.filter((p) => !serverIds.has(p.id))
 
-                    // For server items: if the server still says "Unknown" but we have
-                    // better local data (from the ping), preserve our local health data
                     const merged = serverList.map((serverItem) => {
-                        if (serverItem.status === 'Unknown') {
-                            const localItem = prev.find((p) => p.id === serverItem.id)
-                            if (localItem && localItem.status !== 'Unknown') {
-                                return {
-                                    ...serverItem,
-                                    status: localItem.status,
-                                    responseTime: localItem.responseTime,
-                                    statusCode: localItem.statusCode,
-                                    errorMsg: localItem.errorMsg,
-                                    isUp: localItem.isUp,
-                                    isSlow: localItem.isSlow,
-                                    lastCheck: localItem.lastCheck,
-                                    uptime: localItem.uptime,
-                                }
-                            }
+                        const localPing = localPings[serverItem.id]
+
+                        if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Down')) {
+                            // Server hasn't caught up — keep our real ping data
+                            return { ...serverItem, ...localPing }
                         }
+
+                        // Server has a definitive status — drop the local override
+                        if (localPing && serverItem.status !== 'Unknown') {
+                            delete localPings[serverItem.id]
+                        }
+
                         return serverItem
                     })
 
                     return [...merged, ...localOnly]
                 })
 
-                if (isMountedRef.current) setLastUpdated(new Date())
+                setLastUpdated(new Date())
             } catch { /* ignore */ }
             bgTimerRef.current = null
         }, 8000)
-
-        // Return a cleanup function the caller can invoke if the background POST
-        // fails — removes the optimistic row so it doesn't orphan in the table.
-        return function removeOptimisticRow() {
-            setData((prev) => prev.filter((r) => r.id !== optimisticRow.id))
-        }
     }, [])
 
-
-    // Initial fetch
     useEffect(() => {
         fetchURLs()
     }, [fetchURLs])
 
-    // Optional auto-refresh every 30 seconds — silent (no toast)
     useEffect(() => {
         if (!autoRefresh) return
         const interval = setInterval(() => fetchURLs(false), 30000)
         return () => clearInterval(interval)
     }, [autoRefresh, fetchURLs])
 
-    // Cleanup: mark unmounted and cancel background timer
     useEffect(() => {
-        isMountedRef.current = true
         return () => {
-            isMountedRef.current = false
             if (bgTimerRef.current) clearTimeout(bgTimerRef.current)
         }
     }, [])
