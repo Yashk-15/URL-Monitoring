@@ -93,23 +93,10 @@ export function AddURLDialog({ onURLAdded }) {
         }
 
         handleOpenChange(false)
-        const removeOptimisticRow = onURLAdded ? onURLAdded(payload) : null
-        toast.success(`"${payload.name}" added — monitoring will start shortly`)
-
-        try {
-            const response = await apiClient.post('/urls', payload)
-            if (!response.ok) {
-                const body = await response.text().catch(() => '')
-                throw new Error(`Server returned ${response.status}: ${body}`)
-            }
-        } catch (err) {
-            console.error("Error adding URL:", err)
-            if (typeof removeOptimisticRow === 'function') removeOptimisticRow()
-            toast.error(
-                `Failed to save "${payload.name}" — it has been removed from the table. ${err.message || ''}`,
-                { duration: 8000 }
-            )
+        if (onURLAdded) {
+            onURLAdded(payload)
         }
+        toast.success(`"${payload.name}" added — monitoring will start shortly`)
     }
 
     return (

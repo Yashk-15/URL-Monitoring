@@ -44,12 +44,13 @@ export function useURLData({ autoRefresh = false } = {}) {
                 const localOnly = prev.filter((p) => p.isLocalOnly && !serverUrls.has(p.url))
 
                 const merged = transformedData.map((serverItem) => {
-                    const localPing = localPings[serverItem.url]
+                    const localPing = localPings[serverItem.url] || localPings[serverItem.id]
                     if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Checking' || serverItem.status === 'Down')) {
                         return { ...serverItem, ...localPing }
                     }
                     if (localPing && serverItem.status !== 'Unknown' && serverItem.status !== 'Checking') {
                         delete localPings[serverItem.url]
+                        delete localPings[serverItem.id]
                     }
                     return serverItem
                 })
@@ -113,6 +114,7 @@ export function useURLData({ autoRefresh = false } = {}) {
                     uptime: ping.isUp ? '100' : '0',
                 }
 
+                localPingResultsRef.current[optimisticRow.id] = healthPatch
                 localPingResultsRef.current[optimisticRow.url] = healthPatch
 
                 setData((prev) =>
@@ -143,6 +145,7 @@ export function useURLData({ autoRefresh = false } = {}) {
             .catch((err) => {
                 console.error('[handleURLAdded] POST error:', err)
                 setData((prev) => prev.filter((row) => row.id !== optimisticRow.id))
+                delete localPingResultsRef.current[optimisticRow.id]
                 delete localPingResultsRef.current[optimisticRow.url]
                 toast.error(
                     `Failed to save "${newPayload.name}" — ${err.message || 'network error'}`,
@@ -162,12 +165,13 @@ export function useURLData({ autoRefresh = false } = {}) {
                     const localOnly = prev.filter((p) => p.isLocalOnly && !serverUrls.has(p.url))
 
                     const merged = serverList.map((serverItem) => {
-                        const localPing = localPings[serverItem.url]
+                        const localPing = localPings[serverItem.url] || localPings[serverItem.id]
                         if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Checking' || serverItem.status === 'Down')) {
                             return { ...serverItem, ...localPing }
                         }
                         if (localPing && serverItem.status !== 'Unknown' && serverItem.status !== 'Checking') {
                             delete localPings[serverItem.url]
+                            delete localPings[serverItem.id]
                         }
                         return serverItem
                     })
@@ -192,7 +196,7 @@ export function useURLData({ autoRefresh = false } = {}) {
                     const localOnly = prev.filter((p) => p.isLocalOnly && !serverUrls.has(p.url))
 
                     const merged = serverList.map((serverItem) => {
-                        const localPing = localPings[serverItem.url]
+                        const localPing = localPings[serverItem.url] || localPings[serverItem.id]
 
                         if (localPing && (serverItem.status === 'Unknown' || serverItem.status === 'Checking' || serverItem.status === 'Down')) {
                             return { ...serverItem, ...localPing }
@@ -200,6 +204,7 @@ export function useURLData({ autoRefresh = false } = {}) {
 
                         if (localPing && serverItem.status !== 'Unknown' && serverItem.status !== 'Checking') {
                             delete localPings[serverItem.url]
+                            delete localPings[serverItem.id]
                         }
 
                         return serverItem
