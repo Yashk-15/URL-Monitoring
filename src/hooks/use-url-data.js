@@ -23,6 +23,24 @@ export function useURLData({ autoRefresh = false } = {}) {
 
     const localPingResultsRef = useRef({})
 
+    // Initialize from sessionStorage on mount
+    useEffect(() => {
+        try {
+            const stored = sessionStorage.getItem('urlmonitor_local_pings')
+            if (stored) {
+                localPingResultsRef.current = JSON.parse(stored)
+            }
+        } catch (e) {
+            console.error('Failed to parse local pings from sessionStorage', e)
+        }
+    }, [])
+
+    const syncLocalPings = useCallback(() => {
+        try {
+            sessionStorage.setItem('urlmonitor_local_pings', JSON.stringify(localPingResultsRef.current))
+        } catch (e) {}
+    }, [])
+
     const fetchURLs = useCallback(async (isManual = false) => {
         if (isManual) setIsRefreshing(true)
         else setLoading(true)
@@ -51,6 +69,7 @@ export function useURLData({ autoRefresh = false } = {}) {
                     if (localPing && serverItem.status !== 'Unknown' && serverItem.status !== 'Checking') {
                         delete localPings[serverItem.url]
                         delete localPings[serverItem.id]
+                        syncLocalPings()
                     }
                     return serverItem
                 })
@@ -116,6 +135,7 @@ export function useURLData({ autoRefresh = false } = {}) {
 
                 localPingResultsRef.current[optimisticRow.id] = healthPatch
                 localPingResultsRef.current[optimisticRow.url] = healthPatch
+                syncLocalPings()
 
                 setData((prev) =>
                     prev.map((row) =>
@@ -147,6 +167,7 @@ export function useURLData({ autoRefresh = false } = {}) {
                 setData((prev) => prev.filter((row) => row.id !== optimisticRow.id))
                 delete localPingResultsRef.current[optimisticRow.id]
                 delete localPingResultsRef.current[optimisticRow.url]
+                syncLocalPings()
                 toast.error(
                     `Failed to save "${newPayload.name}" — ${err.message || 'network error'}`,
                     { duration: 8000 }
@@ -172,6 +193,7 @@ export function useURLData({ autoRefresh = false } = {}) {
                         if (localPing && serverItem.status !== 'Unknown' && serverItem.status !== 'Checking') {
                             delete localPings[serverItem.url]
                             delete localPings[serverItem.id]
+                            syncLocalPings()
                         }
                         return serverItem
                     })
@@ -205,6 +227,7 @@ export function useURLData({ autoRefresh = false } = {}) {
                         if (localPing && serverItem.status !== 'Unknown' && serverItem.status !== 'Checking') {
                             delete localPings[serverItem.url]
                             delete localPings[serverItem.id]
+                            syncLocalPings()
                         }
 
                         return serverItem

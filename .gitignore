@@ -41,5 +41,5 @@ yarn-error.log*
 next-env.d.ts
 
 #txt files
-api.txt
-monitor.txt
+API-Lambda.txt
+URL_lambda.txt
